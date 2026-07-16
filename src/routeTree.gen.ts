@@ -14,6 +14,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as GroceryRouteImport } from './routes/grocery'
 import { Route as CustomersRouteImport } from './routes/customers'
 import { Route as CalculatorRouteImport } from './routes/calculator'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 
 const StockRoute = StockRouteImport.update({
@@ -41,6 +42,11 @@ const CalculatorRoute = CalculatorRouteImport.update({
   path: '/calculator',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -49,6 +55,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/calculator': typeof CalculatorRoute
   '/customers': typeof CustomersRoute
   '/grocery': typeof GroceryRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/calculator': typeof CalculatorRoute
   '/customers': typeof CustomersRoute
   '/grocery': typeof GroceryRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/calculator': typeof CalculatorRoute
   '/customers': typeof CustomersRoute
   '/grocery': typeof GroceryRoute
@@ -76,16 +85,25 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/auth'
     | '/calculator'
     | '/customers'
     | '/grocery'
     | '/settings'
     | '/stock'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/calculator' | '/customers' | '/grocery' | '/settings' | '/stock'
+  to:
+    | '/'
+    | '/auth'
+    | '/calculator'
+    | '/customers'
+    | '/grocery'
+    | '/settings'
+    | '/stock'
   id:
     | '__root__'
     | '/'
+    | '/auth'
     | '/calculator'
     | '/customers'
     | '/grocery'
@@ -95,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
   CalculatorRoute: typeof CalculatorRoute
   CustomersRoute: typeof CustomersRoute
   GroceryRoute: typeof GroceryRoute
@@ -139,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CalculatorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -151,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
   CalculatorRoute: CalculatorRoute,
   CustomersRoute: CustomersRoute,
   GroceryRoute: GroceryRoute,
