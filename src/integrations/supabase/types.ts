@@ -323,6 +323,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      recalc_customer_balance: {
+        Args: { _customer_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "user"
