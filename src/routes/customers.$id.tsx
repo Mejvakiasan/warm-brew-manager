@@ -693,7 +693,6 @@ function PaymentDialog({
 }
 
 // small helper: run reset when dialog transitions to open
-import { useEffect, useRef } from "react";
 function useResetOnOpen(open: boolean, reset: () => void) {
   const prev = useRef(false);
   useEffect(() => {
@@ -703,5 +702,5 @@ function useResetOnOpen(open: boolean, reset: () => void) {
   }, [open]);
 }
 
-// Silence unused imports if any (Plus icon retained for potential FAB)
 void Plus;
+
