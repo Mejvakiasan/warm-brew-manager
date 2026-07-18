@@ -71,6 +71,24 @@ function AuthPage() {
         options: { data: { name } },
       });
       if (error) throw error;
+      toast.success("Check your email for the 6-digit code");
+      setMode("verify");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Sign up failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token: otp.trim(),
+        type: "email",
+      });
+      if (error) throw error;
       if (data.user) {
         await supabase.from("users").upsert({
           id: data.user.id,
