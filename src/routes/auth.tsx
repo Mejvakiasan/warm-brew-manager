@@ -66,14 +66,27 @@ function AuthPage() {
   const handleSignUp = async () => {
     setBusy(true);
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { name } },
       });
       if (error) throw error;
-      toast.success("Check your email for the 6-digit code");
-      setMode("verify");
+      if (data.user) {
+        await supabase.from("users").upsert({
+          id: data.user.id,
+          email,
+          name,
+          email_verified: true,
+          role: "staff",
+        });
+      }
+      if (!data.session) {
+        const { error: sErr } = await supabase.auth.signInWithPassword({ email, password });
+        if (sErr) throw sErr;
+      }
+      toast.success("Account created. You're signed in.");
+      navigate({ to: "/" });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Sign up failed");
     } finally {
