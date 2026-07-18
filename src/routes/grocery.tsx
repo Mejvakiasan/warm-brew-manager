@@ -380,7 +380,8 @@ function GroceryPage() {
 
   return (
     <AppShell title="Grocery" subtitle="Daily shopping list" showFab={false}>
-      {tab !== "history" && (
+      {/* Summary card — shown on All tab, and when no list exists yet */}
+      {tab !== "history" && (tab === "all" || !todayList) && (
         <div className="solid-card mb-4 p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Today's list
@@ -448,64 +449,166 @@ function GroceryPage() {
         ))}
       </div>
 
-      {/* TO BUY TAB */}
+      {/* TO BUY TAB — single collapsible section */}
       {tab === "todo" && todayList && (
         <>
-          {itemsLoading && (
-            <div className="solid-card p-6 text-center text-sm text-muted-foreground">
-              Loading items…
-            </div>
-          )}
-          {!itemsLoading && todoItems.length === 0 && (
-            <div className="solid-card p-8 text-center">
-              <p className="text-sm text-muted-foreground">Nothing left to buy 🎉</p>
-              <p className="mt-1 text-xs text-muted-foreground">Tap + to add more items.</p>
-            </div>
-          )}
-          <div className="space-y-2">
-            {todoItems.map((item) => (
-              <div key={item.id} className="solid-card flex items-center gap-3 p-4">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatCurrency(Number(item.price))}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5 rounded-full border border-border bg-card px-1 py-1">
-                  <button
-                    type="button"
-                    aria-label="Decrease quantity"
-                    onClick={() => updateQuantity.mutate({ item, delta: -step(item.unit || "kg") })}
-                    className="press grid h-7 w-7 place-items-center rounded-full bg-muted/70"
-                  >
-                    <Minus className="h-3.5 w-3.5" />
-                  </button>
-                  <span className="mono-amount min-w-[3.5rem] text-center text-sm">
-                    {item.quantity} {item.unit || ""}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Increase quantity"
-                    onClick={() => updateQuantity.mutate({ item, delta: step(item.unit || "kg") })}
-                    className="press grid h-7 w-7 place-items-center rounded-full gradient-warm text-primary-foreground"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  aria-label="Mark purchased"
-                  onClick={() => markPurchased.mutate(item)}
-                  className="press grid h-9 w-9 flex-none place-items-center rounded-full bg-secondary text-secondary-foreground"
-                  title="Purchase"
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                </button>
+          <div className="solid-card overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setTodoOpen((v) => !v)}
+              className="press flex w-full items-center justify-between gap-3 p-4"
+            >
+              <div className="text-left">
+                <p className="text-sm font-semibold text-foreground">
+                  {new Date(todayList.date).toLocaleDateString(undefined, {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                  })}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Budget {formatCurrency(Number(todayList.budget))} · Spent{" "}
+                  {formatCurrency(spent)}
+                </p>
               </div>
-            ))}
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold text-muted-foreground">
+                  {boughtCount}/{items.length}
+                </span>
+                <ChevronDown
+                  className={[
+                    "h-4 w-4 text-muted-foreground transition-transform",
+                    todoOpen ? "rotate-180" : "",
+                  ].join(" ")}
+                />
+              </div>
+            </button>
+
+            {todoOpen && (
+              <div className="space-y-2 border-t border-border/60 p-3">
+                {itemsLoading && (
+                  <p className="p-4 text-center text-sm text-muted-foreground">Loading…</p>
+                )}
+                {!itemsLoading && items.length === 0 && (
+                  <p className="p-4 text-center text-sm text-muted-foreground">
+                    No items yet. Tap + to add.
+                  </p>
+                )}
+                {items.map((item) => {
+                  const tint = item.bought
+                    ? "bg-emerald-50 border-emerald-200"
+                    : item.skipped
+                      ? "bg-red-50 border-red-200"
+                      : "bg-card border-border";
+                  return (
+                    <div
+                      key={item.id}
+                      className={[
+                        "flex items-center gap-2 rounded-2xl border p-3 transition-colors",
+                        tint,
+                      ].join(" ")}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {item.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(Number(item.price))}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 rounded-full border border-border bg-card px-1 py-1">
+                        <button
+                          type="button"
+                          aria-label="Decrease quantity"
+                          onClick={() =>
+                            updateQuantity.mutate({ item, delta: -step(item.unit || "kg") })
+                          }
+                          className="press grid h-7 w-7 place-items-center rounded-full bg-muted/70"
+                        >
+                          <Minus className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="mono-amount min-w-[3rem] text-center text-xs">
+                          {item.quantity}
+                          <span className="ml-0.5 text-[10px] text-muted-foreground">
+                            {item.unit || ""}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Increase quantity"
+                          onClick={() =>
+                            updateQuantity.mutate({ item, delta: step(item.unit || "kg") })
+                          }
+                          className="press grid h-7 w-7 place-items-center rounded-full gradient-warm text-primary-foreground"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Mark bought"
+                        onClick={() =>
+                          setItemState.mutate({
+                            item,
+                            state: item.bought ? "reset" : "bought",
+                          })
+                        }
+                        className={[
+                          "press grid h-9 w-9 flex-none place-items-center rounded-full text-white",
+                          item.bought ? "bg-emerald-600" : "bg-emerald-500/80",
+                        ].join(" ")}
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Mark not bought"
+                        onClick={() =>
+                          setItemState.mutate({
+                            item,
+                            state: item.skipped ? "reset" : "skipped",
+                          })
+                        }
+                        className={[
+                          "press grid h-9 w-9 flex-none place-items-center rounded-full text-white",
+                          item.skipped ? "bg-red-600" : "bg-red-500/80",
+                        ].join(" ")}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
+          {items.length > 0 && (
+            <div className="mt-4">
+              <Button
+                onClick={() => finalizePurchase.mutate()}
+                disabled={!canFinalize || finalizePurchase.isPending}
+                className="press h-12 w-full rounded-2xl gradient-warm text-base font-semibold"
+              >
+                <Flag className="mr-2 h-4 w-4" />
+                {finalizePurchase.isPending ? "Finalizing…" : "Final Purchase"}
+              </Button>
+              {!canFinalize && (
+                <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                  Mark every item green or red to finalize this trip.
+                </p>
+              )}
+              {canFinalize && skippedCount > 0 && (
+                <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                  {skippedCount} red item{skippedCount === 1 ? "" : "s"} will move to tomorrow's
+                  list.
+                </p>
+              )}
+            </div>
+          )}
         </>
       )}
+
 
       {/* ALL TAB — editable */}
       {tab === "all" && todayList && (
