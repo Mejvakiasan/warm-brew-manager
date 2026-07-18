@@ -71,25 +71,7 @@ function AuthPage() {
         options: { data: { name } },
       });
       if (error) throw error;
-      toast.success("Check your email for the 6-digit code");
-      setMode("verify");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Sign up failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleVerify = async () => {
-    setBusy(true);
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token: otp.trim(),
-        type: "email",
-      });
-      if (error) throw error;
-      if (data.user) {
+      if (data?.user) {
         await supabase.from("users").upsert({
           id: data.user.id,
           email,
@@ -98,14 +80,8 @@ function AuthPage() {
           role: "staff",
         });
       }
-      // If a session came back immediately, we're already signed in.
-      if (!data.session) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInError) throw signInError;
-      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) throw signInError;
       toast.success("Account created. Welcome!");
       navigate({ to: "/" });
     } catch (e) {
@@ -114,6 +90,8 @@ function AuthPage() {
       setBusy(false);
     }
   };
+
+  
 
   const handleBootstrap = async () => {
     setBusy(true);
@@ -169,6 +147,8 @@ function AuthPage() {
               className="h-12"
             />
           </Field>
+
+          {/* OTP verification removed: using email+password only */}
 
           {mode === "bootstrap" && (
             <Field label="Setup key">
