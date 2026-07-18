@@ -203,16 +203,24 @@ function GroceryPage() {
     onError: (e: Error) => toast.error(e.message || "Could not add item"),
   });
 
-  const markPurchased = useMutation({
-    mutationFn: async (item: GroceryItem) => {
-      const { error } = await supabase
-        .from("grocery_items")
-        .update({ bought: true })
-        .eq("id", item.id);
+  const setItemState = useMutation({
+    mutationFn: async ({
+      item,
+      state,
+    }: {
+      item: GroceryItem;
+      state: "bought" | "skipped" | "reset";
+    }) => {
+      const patch =
+        state === "bought"
+          ? { bought: true, skipped: false }
+          : state === "skipped"
+            ? { bought: false, skipped: true }
+            : { bought: false, skipped: false };
+      const { error } = await supabase.from("grocery_items").update(patch).eq("id", item.id);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Marked purchased");
       queryClient.invalidateQueries({ queryKey: ["grocery-items", todayList?.id] });
     },
     onError: (e: Error) => toast.error(e.message || "Could not update item"),
