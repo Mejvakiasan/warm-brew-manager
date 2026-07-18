@@ -101,6 +101,7 @@ export type Database = {
           name: string
           price: number
           quantity: number
+          skipped: boolean
           unit: string | null
         }
         Insert: {
@@ -111,6 +112,7 @@ export type Database = {
           name: string
           price?: number
           quantity?: number
+          skipped?: boolean
           unit?: string | null
         }
         Update: {
@@ -121,6 +123,7 @@ export type Database = {
           name?: string
           price?: number
           quantity?: number
+          skipped?: boolean
           unit?: string | null
         }
         Relationships: [
@@ -136,6 +139,7 @@ export type Database = {
       grocery_lists: {
         Row: {
           budget: number
+          completed: boolean
           created_at: string
           created_by: string | null
           date: string
@@ -143,6 +147,7 @@ export type Database = {
         }
         Insert: {
           budget?: number
+          completed?: boolean
           created_at?: string
           created_by?: string | null
           date?: string
@@ -150,6 +155,7 @@ export type Database = {
         }
         Update: {
           budget?: number
+          completed?: boolean
           created_at?: string
           created_by?: string | null
           date?: string
