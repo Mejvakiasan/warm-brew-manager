@@ -67,6 +67,7 @@ function GroceryPage() {
   const [editPrice, setEditPrice] = useState("");
 
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [todoOpen, setTodoOpen] = useState(true);
 
   // Today's list (create-on-demand)
   const { data: todayList, isLoading: listLoading } = useQuery({
@@ -76,6 +77,7 @@ function GroceryPage() {
         .from("grocery_lists")
         .select("*")
         .eq("date", todayISO())
+        .eq("completed", false)
         .maybeSingle();
       if (error) throw error;
       return data;
