@@ -304,13 +304,72 @@ function GroceryPage() {
     onError: (e: Error) => toast.error(e.message || "Could not delete list"),
   });
 
+  const finalizePurchase = useMutation({
+    mutationFn: async () => {
+      if (!todayList) throw new Error("No active list");
+      const skippedItems = items.filter((i) => i.skipped && !i.bought);
+
+      // Ensure tomorrow's list exists
+      let tomorrow: GroceryList | null = null;
+      const { data: existing, error: fetchErr } = await supabase
+        .from("grocery_lists")
+        .select("*")
+        .eq("date", tomorrowISO())
+        .eq("completed", false)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+      tomorrow = existing;
+      if (!tomorrow) {
+        const { data: created, error: createErr } = await supabase
+          .from("grocery_lists")
+          .insert({ date: tomorrowISO(), budget: Number(todayList.budget) || 0 })
+          .select()
+          .single();
+        if (createErr) throw createErr;
+        tomorrow = created;
+      }
+
+      if (skippedItems.length > 0 && tomorrow) {
+        const rows = skippedItems.map((i) => ({
+          list_id: tomorrow!.id,
+          name: i.name,
+          quantity: Number(i.quantity) || 0,
+          unit: i.unit,
+          price: Number(i.price) || 0,
+        }));
+        const { error: insErr } = await supabase.from("grocery_items").insert(rows);
+        if (insErr) throw insErr;
+      }
+
+      const { error: updErr } = await supabase
+        .from("grocery_lists")
+        .update({ completed: true })
+        .eq("id", todayList.id);
+      if (updErr) throw updErr;
+
+      return skippedItems.length;
+    },
+    onSuccess: (movedCount) => {
+      toast.success(
+        movedCount > 0
+          ? `Trip finalized · ${movedCount} item${movedCount === 1 ? "" : "s"} moved to tomorrow`
+          : "Trip finalized",
+      );
+      queryClient.invalidateQueries({ queryKey: ["grocery-list", todayISO()] });
+      queryClient.invalidateQueries({ queryKey: ["grocery-lists-history"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not finalize"),
+  });
+
   const spent = useMemo(
     () => items.reduce((sum, i) => sum + Number(i.price), 0),
     [items],
   );
   const remaining = (Number(todayList?.budget) || 0) - spent;
 
-  const todoItems = items.filter((i) => !i.bought);
+  const boughtCount = items.filter((i) => i.bought).length;
+  const skippedCount = items.filter((i) => i.skipped && !i.bought).length;
+  const canFinalize = items.length > 0 && boughtCount + skippedCount === items.length;
   const startEdit = (item: GroceryItem) => {
     setEditingId(item.id);
     setEditName(item.name);
