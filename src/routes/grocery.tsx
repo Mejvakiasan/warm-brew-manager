@@ -38,7 +38,7 @@ type Tab = "todo" | "all" | "history";
 
 const UNITS = ["kg", "g", "litre", "ml", "piece", "packet", "box", "dozen"];
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const step = (unit: string) => (unit === "kg" || unit === "litre" ? 0.5 : 1);
+const step = (unit: string) => (unit === "kg" || unit === "litre" ? 1 : 1);
 
 function GroceryPage() {
   const { isAdmin } = useAuth();
@@ -51,14 +51,14 @@ function GroceryPage() {
   const [itemOpen, setItemOpen] = useState(false);
   const [itemName, setItemName] = useState("");
   const [itemQty, setItemQty] = useState("1");
-  const [itemUnit, setItemUnit] = useState("kg");
+  const [itemUnit, setItemUnit] = useState("");
   const [itemPrice, setItemPrice] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editQty, setEditQty] = useState("");
-  const [editUnit, setEditUnit] = useState("kg");
+  const [editUnit, setEditUnit] = useState("");
   const [editPrice, setEditPrice] = useState("");
 
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
@@ -189,7 +189,7 @@ function GroceryPage() {
       queryClient.invalidateQueries({ queryKey: ["grocery-item-names"] });
       setItemName("");
       setItemQty("1");
-      setItemUnit("kg");
+      setItemUnit("");
       setItemPrice("");
       setItemOpen(false);
     },
