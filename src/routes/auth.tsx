@@ -15,7 +15,7 @@ export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Sign in — Divakar Tea Shop" }] }),
 });
 
-type Mode = "signin" | "signup" | "verify" | "bootstrap";
+type Mode = "signin" | "signup" | "bootstrap";
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -37,7 +37,6 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [setupKey, setSetupKey] = useState("");
-  const [otp, setOtp] = useState("");
 
   // Redirect signed-in users away
   useEffect(() => {
@@ -66,32 +65,13 @@ function AuthPage() {
   const handleSignUp = async () => {
     setBusy(true);
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { name } },
       });
       if (error) throw error;
-      toast.success("Check your email for the 6-digit code");
-      setMode("verify");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Sign up failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleVerify = async () => {
-    setBusy(true);
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token: otp.trim(),
-        type: "email",
-      });
-      if (error) throw error;
       if (data.user) {
-        // Insert profile row (RLS: auth.uid() = id)
         await supabase.from("users").upsert({
           id: data.user.id,
           email,
@@ -100,10 +80,18 @@ function AuthPage() {
           role: "staff",
         });
       }
-      toast.success("Email verified. You're signed in.");
+      // If a session came back immediately, we're already signed in.
+      if (!data.session) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) throw signInError;
+      }
+      toast.success("Account created. Welcome!");
       navigate({ to: "/" });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Verification failed");
+      toast.error(e instanceof Error ? e.message : "Sign up failed");
     } finally {
       setBusy(false);
     }
@@ -134,8 +122,6 @@ function AuthPage() {
               ? "Create your admin account to get started"
               : mode === "signup"
               ? "Create a new account"
-              : mode === "verify"
-              ? "Enter the code we emailed you"
               : "Sign in to continue"}
           </p>
         </header>
@@ -147,28 +133,24 @@ function AuthPage() {
             </Field>
           )}
 
-          {mode !== "verify" && (
-            <>
-              <Field label="Email">
-                <Input
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-12"
-                />
-              </Field>
-              <Field label="Password">
-                <Input
-                  type="password"
-                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-12"
-                />
-              </Field>
-            </>
-          )}
+          <Field label="Email">
+            <Input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-12"
+            />
+          </Field>
+          <Field label="Password">
+            <Input
+              type="password"
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-12"
+            />
+          </Field>
 
           {mode === "bootstrap" && (
             <Field label="Setup key">
@@ -181,20 +163,6 @@ function AuthPage() {
             </Field>
           )}
 
-          {mode === "verify" && (
-            <Field label="6-digit code">
-              <Input
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                className="h-12 tracking-widest text-center text-lg"
-                maxLength={6}
-              />
-              <p className="text-xs text-muted-foreground">Sent to {email}</p>
-            </Field>
-          )}
-
           <Button
             className="press h-12 w-full rounded-2xl gradient-warm text-base font-semibold"
             disabled={busy}
@@ -203,8 +171,6 @@ function AuthPage() {
                 ? handleSignIn
                 : mode === "signup"
                 ? handleSignUp
-                : mode === "verify"
-                ? handleVerify
                 : handleBootstrap
             }
           >
@@ -213,9 +179,7 @@ function AuthPage() {
               : mode === "signin"
               ? "Sign in"
               : mode === "signup"
-              ? "Send verification code"
-              : mode === "verify"
-              ? "Verify & continue"
+              ? "Create account"
               : "Create admin account"}
           </Button>
         </div>
