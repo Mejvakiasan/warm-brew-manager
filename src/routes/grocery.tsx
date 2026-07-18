@@ -38,6 +38,11 @@ type Tab = "todo" | "all" | "history";
 
 const UNITS = ["kg", "g", "litre", "ml", "piece", "packet", "box", "dozen"];
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const tomorrowISO = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
 const step = (unit: string) => (unit === "kg" || unit === "litre" ? 0.5 : 1);
 
 function GroceryPage() {
