@@ -261,13 +261,15 @@ function GroceryPage() {
     mutationFn: async (item: GroceryItem) => {
       const trimmed = editName.trim();
       if (!trimmed) throw new Error("Item name is required");
+      const qty = Number(editQty) || 0;
+      const unitPrice = Number(editPrice) || 0;
       const { error } = await supabase
         .from("grocery_items")
         .update({
           name: trimmed,
-          quantity: Number(editQty) || 0,
+          quantity: qty,
           unit: editUnit,
-          price: Number(editPrice) || 0,
+          price: qty * unitPrice,
         })
         .eq("id", item.id);
       if (error) throw error;
