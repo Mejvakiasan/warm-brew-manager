@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StockRouteImport } from './routes/stock'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as LedgerRouteImport } from './routes/ledger'
 import { Route as GroceryRouteImport } from './routes/grocery'
 import { Route as CustomersRouteImport } from './routes/customers'
 import { Route as CalculatorRouteImport } from './routes/calculator'
@@ -26,6 +27,11 @@ const StockRoute = StockRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LedgerRoute = LedgerRouteImport.update({
+  id: '/ledger',
+  path: '/ledger',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GroceryRoute = GroceryRouteImport.update({
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/calculator': typeof CalculatorRoute
   '/customers': typeof CustomersRouteWithChildren
   '/grocery': typeof GroceryRoute
+  '/ledger': typeof LedgerRoute
   '/settings': typeof SettingsRoute
   '/stock': typeof StockRoute
   '/customers/$id': typeof CustomersIdRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/calculator': typeof CalculatorRoute
   '/customers': typeof CustomersRouteWithChildren
   '/grocery': typeof GroceryRoute
+  '/ledger': typeof LedgerRoute
   '/settings': typeof SettingsRoute
   '/stock': typeof StockRoute
   '/customers/$id': typeof CustomersIdRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/calculator': typeof CalculatorRoute
   '/customers': typeof CustomersRouteWithChildren
   '/grocery': typeof GroceryRoute
+  '/ledger': typeof LedgerRoute
   '/settings': typeof SettingsRoute
   '/stock': typeof StockRoute
   '/customers/$id': typeof CustomersIdRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/calculator'
     | '/customers'
     | '/grocery'
+    | '/ledger'
     | '/settings'
     | '/stock'
     | '/customers/$id'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/calculator'
     | '/customers'
     | '/grocery'
+    | '/ledger'
     | '/settings'
     | '/stock'
     | '/customers/$id'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/calculator'
     | '/customers'
     | '/grocery'
+    | '/ledger'
     | '/settings'
     | '/stock'
     | '/customers/$id'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   CalculatorRoute: typeof CalculatorRoute
   CustomersRoute: typeof CustomersRouteWithChildren
   GroceryRoute: typeof GroceryRoute
+  LedgerRoute: typeof LedgerRoute
   SettingsRoute: typeof SettingsRoute
   StockRoute: typeof StockRoute
 }
@@ -147,6 +160,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ledger': {
+      id: '/ledger'
+      path: '/ledger'
+      fullPath: '/ledger'
+      preLoaderRoute: typeof LedgerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/grocery': {
@@ -212,9 +232,20 @@ const rootRouteChildren: RootRouteChildren = {
   CalculatorRoute: CalculatorRoute,
   CustomersRoute: CustomersRouteWithChildren,
   GroceryRoute: GroceryRoute,
+  LedgerRoute: LedgerRoute,
   SettingsRoute: SettingsRoute,
   StockRoute: StockRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

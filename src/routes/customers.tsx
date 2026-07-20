@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Plus, ChevronRight, Phone } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -17,6 +17,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { formatCurrency } from "@/lib/format";
+import { CustomerLedgerModal } from "@/components/customer-ledger-modal";
+import { SupabaseLedgerProvider } from "@/integrations/ledger-provider";
 
 export const Route = createFileRoute("/customers")({
   component: CustomersPage,
@@ -30,6 +32,14 @@ function CustomersPage() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
+  // Create ledger provider (Supabase)
+  const ledgerProvider = useMemo(() => new SupabaseLedgerProvider(supabase), []);
 
   const { data: customers = [], isLoading, error } = useQuery({
     queryKey: ["customers"],
@@ -108,20 +118,24 @@ function CustomersPage() {
 
       <div className="space-y-2">
         {customers.map((c) => (
-          <Link
+          <div
             key={c.id}
-            to="/customers/$id"
-            params={{ id: c.id }}
             className="press solid-card flex items-center justify-between gap-3 p-4"
           >
-            <div className="min-w-0">
+            <button
+              onClick={() => {
+                setSelectedCustomer({ id: c.id, name: c.name });
+                setLedgerOpen(true);
+              }}
+              className="min-w-0 flex-1 text-left hover:opacity-80"
+            >
               <p className="truncate text-base font-semibold text-foreground">{c.name}</p>
               {c.phone && (
                 <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
                   <Phone className="h-3 w-3" /> {c.phone}
                 </p>
               )}
-            </div>
+            </button>
             <div className="flex items-center gap-2">
               <div className="text-right">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -138,7 +152,7 @@ function CustomersPage() {
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </div>
-          </Link>
+          </div>
         ))}
       </div>
 
@@ -146,7 +160,7 @@ function CustomersPage() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Add customer"
-        className="press fixed right-5 bottom-24 z-40 grid h-14 w-14 place-items-center rounded-full gradient-warm shadow-[var(--shadow-pop)]"
+        className="press fixed right-5 bottom-24 z-40 grid h-14 w-14 place-items-center rounded-full gradient-warm shadow-(--shadow-pop)"
       >
         <Plus className="h-7 w-7 text-primary-foreground" strokeWidth={2.5} />
       </button>
@@ -191,6 +205,19 @@ function CustomersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {selectedCustomer && (
+        <CustomerLedgerModal
+          open={ledgerOpen}
+          onOpenChange={setLedgerOpen}
+          customerId={selectedCustomer.id}
+          customerName={selectedCustomer.name}
+          provider={ledgerProvider}
+          onBalanceChange={() => {
+            queryClient.invalidateQueries({ queryKey: ["customers"] });
+          }}
+        />
+      )}
     </AppShell>
   );
 }
