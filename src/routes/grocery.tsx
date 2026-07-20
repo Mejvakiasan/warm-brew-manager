@@ -181,12 +181,14 @@ function GroceryPage() {
       if (!todayList?.id) throw new Error("Start today's list first");
       const trimmed = itemName.trim();
       if (!trimmed) throw new Error("Item name is required");
+      const qty = Number(itemQty) || 0;
+      const unitPrice = Number(itemPrice) || 0;
       const { error } = await supabase.from("grocery_items").insert({
         list_id: todayList.id,
         name: trimmed,
-        quantity: Number(itemQty) || 0,
+        quantity: qty,
         unit: itemUnit,
-        price: Number(itemPrice) || 0,
+        price: qty * unitPrice,
       });
       if (error) throw error;
     },
@@ -259,13 +261,15 @@ function GroceryPage() {
     mutationFn: async (item: GroceryItem) => {
       const trimmed = editName.trim();
       if (!trimmed) throw new Error("Item name is required");
+      const qty = Number(editQty) || 0;
+      const unitPrice = Number(editPrice) || 0;
       const { error } = await supabase
         .from("grocery_items")
         .update({
           name: trimmed,
-          quantity: Number(editQty) || 0,
+          quantity: qty,
           unit: editUnit,
-          price: Number(editPrice) || 0,
+          price: qty * unitPrice,
         })
         .eq("id", item.id);
       if (error) throw error;
@@ -375,7 +379,9 @@ function GroceryPage() {
     setEditName(item.name);
     setEditQty(String(item.quantity));
     setEditUnit(item.unit || "kg");
-    setEditPrice(String(item.price));
+    const q = Number(item.quantity) || 0;
+    const unitPrice = q > 0 ? Number(item.price) / q : Number(item.price);
+    setEditPrice(unitPrice ? String(Number(unitPrice.toFixed(4))) : "");
   };
 
   return (
@@ -652,13 +658,19 @@ function GroceryPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <Input
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(e.target.value)}
-                    inputMode="decimal"
-                    className="h-10"
-                    placeholder="Price"
-                  />
+                  <div className="space-y-1">
+                    <Label className="text-xs">Price per unit</Label>
+                    <Input
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(e.target.value)}
+                      inputMode="decimal"
+                      className="h-10"
+                      placeholder="Price per unit"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Total: {formatCurrency((Number(editQty) || 0) * (Number(editPrice) || 0))}
+                    </p>
+                  </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -952,7 +964,7 @@ function GroceryPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="g-price">Price</Label>
+              <Label htmlFor="g-price">Price per unit</Label>
               <Input
                 id="g-price"
                 value={itemPrice}
@@ -961,6 +973,12 @@ function GroceryPage() {
                 placeholder="0"
                 className="h-12"
               />
+              <div className="rounded-xl bg-muted/60 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Total: </span>
+                <span className="mono-amount font-semibold text-secondary">
+                  {formatCurrency((Number(itemQty) || 0) * (Number(itemPrice) || 0))}
+                </span>
+              </div>
             </div>
           </div>
           <DialogFooter>
