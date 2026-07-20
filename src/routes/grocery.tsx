@@ -796,28 +796,73 @@ function GroceryPage() {
               </button>
               {expandedHistoryId === l.id && (() => {
                 const purchased = historyItems.filter((it) => it.bought);
+                const skipped = historyItems.filter((it) => it.skipped && !it.bought);
                 const total = purchased.reduce(
                   (s, it) => s + Number(it.price),
                   0,
                 );
                 return (
-                  <div className="space-y-2 border-t border-border/60 p-4 pt-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Final purchased list
-                      </p>
-                      <span className="text-[10px] text-muted-foreground">
-                        {purchased.length} item{purchased.length === 1 ? "" : "s"}
-                      </span>
+                  <div className="space-y-4 border-t border-border/60 p-4 pt-3">
+                    {/* Purchased */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                          Final purchased list
+                        </p>
+                        <span className="text-[10px] text-muted-foreground">
+                          {purchased.length} item{purchased.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      {purchased.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No items were purchased on this trip.
+                        </p>
+                      ) : (
+                        <>
+                          <div className="space-y-1.5">
+                            {purchased.map((it) => (
+                              <div
+                                key={it.id}
+                                className="flex items-center justify-between text-sm"
+                              >
+                                <span className="text-foreground">
+                                  {it.name} · {it.quantity} {it.unit}
+                                </span>
+                                <span className="mono-amount text-secondary">
+                                  {formatCurrency(Number(it.price))}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Total spent
+                            </span>
+                            <span className="mono-amount text-base font-semibold text-secondary">
+                              {formatCurrency(total)}
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    {purchased.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        No items were purchased on this trip.
-                      </p>
-                    ) : (
-                      <>
+
+                    {/* Skipped */}
+                    <div className="space-y-2 border-t border-border/60 pt-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-destructive">
+                          Skipped items
+                        </p>
+                        <span className="text-[10px] text-muted-foreground">
+                          {skipped.length} item{skipped.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      {skipped.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No items were skipped on this trip.
+                        </p>
+                      ) : (
                         <div className="space-y-1.5">
-                          {purchased.map((it) => (
+                          {skipped.map((it) => (
                             <div
                               key={it.id}
                               className="flex items-center justify-between text-sm"
@@ -825,22 +870,14 @@ function GroceryPage() {
                               <span className="text-foreground">
                                 {it.name} · {it.quantity} {it.unit}
                               </span>
-                              <span className="mono-amount text-secondary">
+                              <span className="mono-amount text-muted-foreground">
                                 {formatCurrency(Number(it.price))}
                               </span>
                             </div>
                           ))}
                         </div>
-                        <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Total spent
-                          </span>
-                          <span className="mono-amount text-base font-semibold text-secondary">
-                            {formatCurrency(total)}
-                          </span>
-                        </div>
-                      </>
-                    )}
+                      )}
+                    </div>
                   </div>
                 );
               })()}
