@@ -964,7 +964,7 @@ function GroceryPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="g-price">Price</Label>
+              <Label htmlFor="g-price">Price per unit</Label>
               <Input
                 id="g-price"
                 value={itemPrice}
@@ -973,6 +973,12 @@ function GroceryPage() {
                 placeholder="0"
                 className="h-12"
               />
+              <div className="rounded-xl bg-muted/60 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Total: </span>
+                <span className="mono-amount font-semibold text-secondary">
+                  {formatCurrency((Number(itemQty) || 0) * (Number(itemPrice) || 0))}
+                </span>
+              </div>
             </div>
           </div>
           <DialogFooter>
