@@ -379,7 +379,9 @@ function GroceryPage() {
     setEditName(item.name);
     setEditQty(String(item.quantity));
     setEditUnit(item.unit || "kg");
-    setEditPrice(String(item.price));
+    const q = Number(item.quantity) || 0;
+    const unitPrice = q > 0 ? Number(item.price) / q : Number(item.price);
+    setEditPrice(unitPrice ? String(Number(unitPrice.toFixed(4))) : "");
   };
 
   return (
