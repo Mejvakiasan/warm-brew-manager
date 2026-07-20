@@ -658,13 +658,19 @@ function GroceryPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <Input
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(e.target.value)}
-                    inputMode="decimal"
-                    className="h-10"
-                    placeholder="Price"
-                  />
+                  <div className="space-y-1">
+                    <Label className="text-xs">Price per unit</Label>
+                    <Input
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(e.target.value)}
+                      inputMode="decimal"
+                      className="h-10"
+                      placeholder="Price per unit"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Total: {formatCurrency((Number(editQty) || 0) * (Number(editPrice) || 0))}
+                    </p>
+                  </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
