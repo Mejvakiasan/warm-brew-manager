@@ -181,12 +181,14 @@ function GroceryPage() {
       if (!todayList?.id) throw new Error("Start today's list first");
       const trimmed = itemName.trim();
       if (!trimmed) throw new Error("Item name is required");
+      const qty = Number(itemQty) || 0;
+      const unitPrice = Number(itemPrice) || 0;
       const { error } = await supabase.from("grocery_items").insert({
         list_id: todayList.id,
         name: trimmed,
-        quantity: Number(itemQty) || 0,
+        quantity: qty,
         unit: itemUnit,
-        price: Number(itemPrice) || 0,
+        price: qty * unitPrice,
       });
       if (error) throw error;
     },
