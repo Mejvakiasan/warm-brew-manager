@@ -436,7 +436,7 @@ function GroceryPage() {
       <div className="mb-4 flex gap-2">
         {([
           ["todo", "To buy"],
-          ["all", "Skipped"],
+          ["skipped", "Skipped"],
           ["history", "History"],
         ] as [Tab, string][]).map(([t, label]) => (
           <button
