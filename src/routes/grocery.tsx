@@ -34,7 +34,7 @@ export const Route = createFileRoute("/grocery")({
 
 type GroceryList = Tables<"grocery_lists">;
 type GroceryItem = Tables<"grocery_items">;
-type Tab = "todo" | "all" | "history";
+type Tab = "todo" | "skipped" | "history";
 
 const UNITS = ["kg", "g", "litre", "ml", "piece", "packet", "box", "dozen"];
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -43,7 +43,7 @@ const tomorrowISO = () => {
   d.setDate(d.getDate() + 1);
   return d.toISOString().slice(0, 10);
 };
-const step = (unit: string) => (unit === "kg" || unit === "litre" ? 0.5 : 1);
+const step = (unit: string) => (unit === "kg" || unit === "litre" ? 1 : 1);
 
 function GroceryPage() {
   const { isAdmin } = useAuth();
@@ -380,8 +380,8 @@ function GroceryPage() {
 
   return (
     <AppShell title="Grocery" subtitle="Daily shopping list" showFab={false}>
-      {/* Summary card — shown on All tab, and when no list exists yet */}
-      {tab !== "history" && (tab === "all" || !todayList) && (
+      {/* Summary card — shown on Skipped tab, and when no list exists yet */}
+      {tab !== "history" && (tab === "skipped" || !todayList) && (
         <div className="solid-card mb-4 p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Today's list
@@ -430,7 +430,7 @@ function GroceryPage() {
       <div className="mb-4 flex gap-2">
         {([
           ["todo", "To buy"],
-          ["all", "All"],
+          ["all", "Skipped"],
           ["history", "History"],
         ] as [Tab, string][]).map(([t, label]) => (
           <button
@@ -544,22 +544,7 @@ function GroceryPage() {
                           <Plus className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        aria-label="Mark bought"
-                        onClick={() =>
-                          setItemState.mutate({
-                            item,
-                            state: item.bought ? "reset" : "bought",
-                          })
-                        }
-                        className={[
-                          "press grid h-9 w-9 flex-none place-items-center rounded-full text-white",
-                          item.bought ? "bg-emerald-600" : "bg-emerald-500/80",
-                        ].join(" ")}
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                      </button>
+                      
                       <button
                         type="button"
                         aria-label="Mark not bought"
@@ -587,7 +572,7 @@ function GroceryPage() {
             <div className="mt-4">
               <Button
                 onClick={() => finalizePurchase.mutate()}
-                disabled={!canFinalize || finalizePurchase.isPending}
+                disabled={finalizePurchase.isPending}
                 className="press h-12 w-full rounded-2xl gradient-warm text-base font-semibold"
               >
                 <Flag className="mr-2 h-4 w-4" />
@@ -610,16 +595,17 @@ function GroceryPage() {
       )}
 
 
-      {/* ALL TAB — editable */}
-      {tab === "all" && todayList && (
+      {/* SKIPPED TAB — editable */}
+      {tab === "skipped" && todayList && (
         <div className="space-y-2">
-          {items.length === 0 && (
+          {items.filter(it => it.skipped).length === 0 &&(
             <div className="solid-card p-8 text-center">
               <p className="text-sm text-muted-foreground">No items yet.</p>
             </div>
           )}
-          {items.map((item) => (
+          {items.filter(it => it.skipped).map((item) => (
             <div key={item.id} className="solid-card p-4">
+              
               {editingId === item.id ? (
                 <div className="space-y-3">
                   <Input
@@ -716,9 +702,9 @@ function GroceryPage() {
                     >
                       {item.name}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.quantity} {item.unit || ""} · {formatCurrency(Number(item.price))}
-                    </p>
+                   <p className="text-xs text-muted-foreground">
+  {item.quantity} {item.unit || ""} · {formatCurrency(Number(item.price) * Number(item.quantity) || 1)}
+</p>
                   </div>
                   <button
                     type="button"
@@ -762,7 +748,7 @@ function GroceryPage() {
           )}
           {pastLists.map((l) => (
             <div key={l.id} className="solid-card overflow-hidden">
-              <button
+              <button 
                 type="button"
                 onClick={() => setExpandedHistoryId(expandedHistoryId === l.id ? null : l.id)}
                 className="press flex w-full items-center justify-between p-4"
@@ -783,6 +769,7 @@ function GroceryPage() {
                         e.stopPropagation();
                         deleteList.mutate(l.id);
                       }}
+                      className="press grid h-8 w-8 place-items-center rounded-full bg-destructive/10"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </span>
@@ -797,24 +784,46 @@ function GroceryPage() {
               </button>
               {expandedHistoryId === l.id && (
                 <div className="space-y-1.5 border-t border-border/60 p-4 pt-3">
-                  {historyItems.length === 0 && (
+                  {historyItems
+                  .filter(it => !it.skipped)
+                  .length === 0 && (
                     <p className="text-xs text-muted-foreground">No items in this list.</p>
                   )}
-                  {historyItems.map((it) => (
-                    <div key={it.id} className="flex items-center justify-between text-sm">
-                      <span
-                        className={
-                          it.bought ? "text-muted-foreground line-through" : "text-foreground"
-                        }
-                      >
-                        {it.name} · {it.quantity} {it.unit}
-                      </span>
-                      <span className="mono-amount text-secondary">
-                        {formatCurrency(Number(it.price))}
-                      </span>
-                    </div>
-                  ))}
+
+                  
+
+                  
+                  {/* Bought/normal items */}
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">Purchased items</p>
+      {historyItems.filter(it => !it.skipped).map((it) => (
+        <div key={it.id} className="flex items-center justify-between text-sm">
+          <span className="text-foreground">
+            {it.name} · {it.quantity} {it.unit}
+          </span>
+          <span className="mono-amount text-secondary">
+            {formatCurrency(Number(it.price))}
+          </span>
+        </div>
+      ))}
+    </div>
+
+     {/* Skipped items */}
+    <div className="space-y-1">
+      <p className="text-xs text-red-500">Skipped items</p>
+      {historyItems.filter(it => it.skipped).map((it) => (
+        <div key={it.id} className="flex items-center justify-between text-sm">
+          <span className="text-red-500 font-semibold">
+            {it.name} · {it.quantity} {it.unit}
+          </span>
+          <span className="mono-amount text-secondary">
+            {formatCurrency(Number(it.price))}
+          </span>
+        </div>
+      ))}
+    </div>
                 </div>
+                
               )}
             </div>
           ))}
