@@ -311,35 +311,44 @@ function GroceryPage() {
   const finalizePurchase = useMutation({
     mutationFn: async () => {
       if (!todayList) throw new Error("No active list");
-      const skippedItems = items.filter((i) => i.skipped && !i.bought);
+      const skippedItems = items.filter((i) => i.skipped);
+      const toBuyItems = items.filter((i) => !i.skipped);
 
-      // Ensure tomorrow's list exists
-      let tomorrow: GroceryList | null = null;
-      const { data: existing, error: fetchErr } = await supabase
-        .from("grocery_lists")
-        .select("*")
-        .eq("date", tomorrowISO())
-        .eq("completed", false)
-        .maybeSingle();
-      if (fetchErr) throw fetchErr;
-      tomorrow = existing;
-      if (!tomorrow) {
-        const { data: created, error: createErr } = await supabase
-          .from("grocery_lists")
-          .insert({ date: tomorrowISO(), budget: Number(todayList.budget) || 0 })
-          .select()
-          .single();
-        if (createErr) throw createErr;
-        tomorrow = created;
+      if (toBuyItems.length > 0) {
+        const { error: buyErr } = await supabase
+          .from("grocery_items")
+          .update({ bought: true })
+          .in("id", toBuyItems.map((i) => i.id));
+        if (buyErr) throw buyErr;
       }
 
-      if (skippedItems.length > 0 && tomorrow) {
+      if (skippedItems.length > 0) {
+        let tomorrow: GroceryList | null = null;
+        const { data: existing, error: fetchErr } = await supabase
+          .from("grocery_lists")
+          .select("*")
+          .eq("date", tomorrowISO())
+          .eq("completed", false)
+          .maybeSingle();
+        if (fetchErr) throw fetchErr;
+        tomorrow = existing;
+        if (!tomorrow) {
+          const { data: created, error: createErr } = await supabase
+            .from("grocery_lists")
+            .insert({ date: tomorrowISO(), budget: Number(todayList.budget) || 0 })
+            .select()
+            .single();
+          if (createErr) throw createErr;
+          tomorrow = created;
+        }
         const rows = skippedItems.map((i) => ({
           list_id: tomorrow!.id,
           name: i.name,
           quantity: Number(i.quantity) || 0,
           unit: i.unit,
           price: Number(i.price) || 0,
+          bought: false,
+          skipped: false,
         }));
         const { error: insErr } = await supabase.from("grocery_items").insert(rows);
         if (insErr) throw insErr;
@@ -361,6 +370,7 @@ function GroceryPage() {
       );
       queryClient.invalidateQueries({ queryKey: ["grocery-list", todayISO()] });
       queryClient.invalidateQueries({ queryKey: ["grocery-lists-history"] });
+      setTab("history");
     },
     onError: (e: Error) => toast.error(e.message || "Could not finalize"),
   });
@@ -371,9 +381,8 @@ function GroceryPage() {
   );
   const remaining = (Number(todayList?.budget) || 0) - spent;
 
-  const boughtCount = items.filter((i) => i.bought).length;
-  const skippedCount = items.filter((i) => i.skipped && !i.bought).length;
-  const canFinalize = items.length > 0 && boughtCount + skippedCount === items.length;
+  const skippedCount = items.filter((i) => i.skipped).length;
+  const canFinalize = items.length > 0;
   const startEdit = (item: GroceryItem) => {
     setEditingId(item.id);
     setEditName(item.name);
@@ -479,7 +488,7 @@ function GroceryPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-[11px] font-semibold text-muted-foreground">
-                  {boughtCount}/{items.length}
+                  {items.length - skippedCount}/{items.length}
                 </span>
                 <ChevronDown
                   className={[
@@ -501,11 +510,9 @@ function GroceryPage() {
                   </p>
                 )}
                 {items.map((item) => {
-                  const tint = item.bought
-                    ? "bg-emerald-50 border-emerald-200"
-                    : item.skipped
-                      ? "bg-red-50 border-red-200"
-                      : "bg-card border-border";
+                  const tint = item.skipped
+                    ? "bg-red-50 border-red-200"
+                    : "bg-card border-border";
                   return (
                     <div
                       key={item.id}
@@ -584,15 +591,9 @@ function GroceryPage() {
                 <Flag className="mr-2 h-4 w-4" />
                 {finalizePurchase.isPending ? "Finalizing…" : "Final Purchase"}
               </Button>
-              {!canFinalize && (
+              {skippedCount > 0 && (
                 <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                  Mark every item green or red to finalize this trip.
-                </p>
-              )}
-              {canFinalize && skippedCount > 0 && (
-                <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                  {skippedCount} red item{skippedCount === 1 ? "" : "s"} will move to tomorrow's
-                  list.
+                  {skippedCount} skipped item{skippedCount === 1 ? "" : "s"} will move to tomorrow's list.
                 </p>
               )}
             </div>
@@ -766,7 +767,14 @@ function GroceryPage() {
                 className="press flex w-full items-center justify-between p-4"
               >
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-foreground">{l.date}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground">{l.date}</p>
+                    {l.completed && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        Completed
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Budget {formatCurrency(Number(l.budget))}
                   </p>
@@ -795,8 +803,8 @@ function GroceryPage() {
                 </div>
               </button>
               {expandedHistoryId === l.id && (() => {
-                const purchased = historyItems.filter((it) => it.bought);
-                const skipped = historyItems.filter((it) => it.skipped && !it.bought);
+                const purchased = historyItems.filter((it) => !it.skipped);
+                const skipped = historyItems.filter((it) => it.skipped);
                 const total = purchased.reduce(
                   (s, it) => s + Number(it.price),
                   0,
@@ -807,7 +815,7 @@ function GroceryPage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                          Final purchased list
+                          Purchased
                         </p>
                         <span className="text-[10px] text-muted-foreground">
                           {purchased.length} item{purchased.length === 1 ? "" : "s"}
