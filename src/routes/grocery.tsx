@@ -767,7 +767,14 @@ function GroceryPage() {
                 className="press flex w-full items-center justify-between p-4"
               >
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-foreground">{l.date}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground">{l.date}</p>
+                    {l.completed && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        Completed
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Budget {formatCurrency(Number(l.budget))}
                   </p>
