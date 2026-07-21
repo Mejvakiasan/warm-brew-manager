@@ -803,8 +803,8 @@ function GroceryPage() {
                 </div>
               </button>
               {expandedHistoryId === l.id && (() => {
-                const purchased = historyItems.filter((it) => it.bought);
-                const skipped = historyItems.filter((it) => it.skipped && !it.bought);
+                const purchased = historyItems.filter((it) => !it.skipped);
+                const skipped = historyItems.filter((it) => it.skipped);
                 const total = purchased.reduce(
                   (s, it) => s + Number(it.price),
                   0,
