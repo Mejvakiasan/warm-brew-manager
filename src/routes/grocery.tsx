@@ -488,7 +488,7 @@ function GroceryPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-[11px] font-semibold text-muted-foreground">
-                  {boughtCount}/{items.length}
+                  {items.length - skippedCount}/{items.length}
                 </span>
                 <ChevronDown
                   className={[
