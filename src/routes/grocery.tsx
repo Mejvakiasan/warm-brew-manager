@@ -510,11 +510,9 @@ function GroceryPage() {
                   </p>
                 )}
                 {items.map((item) => {
-                  const tint = item.bought
-                    ? "bg-emerald-50 border-emerald-200"
-                    : item.skipped
-                      ? "bg-red-50 border-red-200"
-                      : "bg-card border-border";
+                  const tint = item.skipped
+                    ? "bg-red-50 border-red-200"
+                    : "bg-card border-border";
                   return (
                     <div
                       key={item.id}
