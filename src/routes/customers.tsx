@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { Plus, ChevronRight, Phone } from "lucide-react";
+import { Plus, ChevronRight, Phone, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { formatCurrency } from "@/lib/format";
 import { CustomerLedgerModal } from "@/components/customer-ledger-modal";
 import { SupabaseLedgerProvider } from "@/integrations/ledger-provider";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/customers")({
   component: CustomersPage,
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/customers")({
 type Customer = Tables<"customers">;
 
 function CustomersPage() {
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -73,6 +75,18 @@ function CustomersPage() {
       setOpen(false);
     },
     onError: (e: Error) => toast.error(e.message || "Could not add customer"),
+  });
+
+   const deleteCustomer = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("customers").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Customer removed");
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not remove customer"),
   });
 
   const totalOwed = customers.reduce((sum, c) => sum + Number(c.balance), 0);
@@ -150,6 +164,26 @@ function CustomersPage() {
                   {formatCurrency(Number(c.balance))}
                 </p>
               </div>
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  aria-label={`Delete ${c.name}`}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Delete ${c.name}? This removes their record and all transaction/payment history. This can't be undone.`,
+                      )
+                    ) {
+                      deleteCustomer.mutate(c.id);
+                    }
+                  }}
+                  className="press grid h-8 w-8 flex-none place-items-center rounded-full bg-destructive/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </button>
+              )}
+
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </div>
           </div>

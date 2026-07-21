@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Minus, Trash2, Check, Pencil, X, ChevronDown, CheckCircle2, XCircle, Flag } from "lucide-react";
+import { Plus, Minus, Trash2, Check, Pencil, X, ChevronDown, CheckCircle2, XCircle, Flag, Share2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,7 +120,7 @@ function GroceryPage() {
     },
   });
 
-  // Past lists (history), excluding today
+  // Past lists (history) — any finalized/completed trip, regardless of date
   const { data: pastLists = [] } = useQuery({
     queryKey: ["grocery-lists-history"],
     enabled: tab === "history",
@@ -128,8 +128,9 @@ function GroceryPage() {
       const { data, error } = await supabase
         .from("grocery_lists")
         .select("*")
-        .neq("date", todayISO())
+        .eq("completed", true)
         .order("date", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(30);
       if (error) throw error;
       return data ?? [];
@@ -368,9 +369,11 @@ function GroceryPage() {
           ? `Trip finalized · ${movedCount} item${movedCount === 1 ? "" : "s"} moved to tomorrow`
           : "Trip finalized",
       );
+      const finishedListId = todayList?.id ?? null;
       queryClient.invalidateQueries({ queryKey: ["grocery-list", todayISO()] });
       queryClient.invalidateQueries({ queryKey: ["grocery-lists-history"] });
       setTab("history");
+      setExpandedHistoryId(finishedListId);
     },
     onError: (e: Error) => toast.error(e.message || "Could not finalize"),
   });
@@ -393,6 +396,29 @@ function GroceryPage() {
     setEditPrice(unitPrice ? String(Number(unitPrice.toFixed(4))) : "");
   };
 
+  const shareToWhatsApp = () => {
+    if (!todayList) return;
+    const dateLabel = new Date(todayList.date).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const lines = [
+      `🛒 Grocery List — ${dateLabel}`,
+      `Budget: ${formatCurrency(Number(todayList.budget))}`,
+      "",
+      ...items.map(
+        (i, idx) =>
+          `${idx + 1}. ${i.name} - ${i.quantity} ${i.unit || ""} - ${formatCurrency(Number(i.price))}${i.skipped ? " (skip)" : ""}`,
+      ),
+      "",
+      `Spent: ${formatCurrency(spent)}`,
+      `Remaining: ${formatCurrency(remaining)}`,
+    ];
+    const text = encodeURIComponent(lines.join("\n"));
+    window.open(`https://wa.me/?text=${text}`, "_blank");
+  };
+
   return (
     <AppShell title="Grocery" subtitle="Daily shopping list" showFab={false}>
       {/* Summary card — shown on Skipped tab, and when no list exists yet */}
@@ -405,16 +431,6 @@ function GroceryPage() {
             <div className="mt-1 flex items-end justify-between">
               <div>
                 <p className="text-[11px] text-muted-foreground">Budget</p>
-                <p className="mono-amount text-lg text-foreground">
-                  {formatCurrency(Number(todayList.budget))}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground">Spent</p>
-                <p className="mono-amount text-lg text-foreground">{formatCurrency(spent)}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] text-muted-foreground">Remaining</p>
                 <p
                   className={[
                     "mono-amount text-2xl",
@@ -423,6 +439,10 @@ function GroceryPage() {
                 >
                   {formatCurrency(remaining)}
                 </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] text-muted-foreground">Spent</p>
+                <p className="mono-amount text-lg text-foreground">{formatCurrency(spent)}</p>
               </div>
             </div>
           ) : (
@@ -481,8 +501,13 @@ function GroceryPage() {
                     month: "short",
                   })}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Budget {formatCurrency(Number(todayList.budget))} · Spent{" "}
+                <p
+                  className={[
+                    "text-xs",
+                    remaining < 0 ? "text-destructive" : "text-muted-foreground",
+                  ].join(" ")}
+                >
+                  Budget {formatCurrency(remaining)} · Spent{" "}
                   {formatCurrency(spent)}
                 </p>
               </div>
@@ -583,14 +608,24 @@ function GroceryPage() {
 
           {items.length > 0 && (
             <div className="mt-4">
-              <Button
-                onClick={() => finalizePurchase.mutate()}
-                disabled={finalizePurchase.isPending}
-                className="press h-12 w-full rounded-2xl gradient-warm text-base font-semibold"
-              >
-                <Flag className="mr-2 h-4 w-4" />
-                {finalizePurchase.isPending ? "Finalizing…" : "Final Purchase"}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => finalizePurchase.mutate()}
+                  disabled={finalizePurchase.isPending}
+                  className="press h-12 flex-1 rounded-2xl gradient-warm text-base font-semibold"
+                >
+                  <Flag className="mr-2 h-4 w-4" />
+                  {finalizePurchase.isPending ? "Finalizing…" : "Final Purchase"}
+                </Button>
+                <button
+                  type="button"
+                  aria-label="Share list on WhatsApp"
+                  onClick={shareToWhatsApp}
+                  className="press grid h-12 w-12 flex-none place-items-center rounded-2xl bg-[#25D366] text-white"
+                >
+                  <Share2 className="h-5 w-5" />
+                </button>
+              </div>
               {skippedCount > 0 && (
                 <p className="mt-2 text-center text-[11px] text-muted-foreground">
                   {skippedCount} skipped item{skippedCount === 1 ? "" : "s"} will move to tomorrow's list.
@@ -700,25 +735,22 @@ function GroceryPage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <Checkbox
-                    checked={item.bought}
-                    onCheckedChange={() => toggleBought.mutate(item)}
-                  />
                   <div className="min-w-0 flex-1">
-                    <p
-                      className={[
-                        "truncate text-sm font-semibold",
-                        item.bought
-                          ? "text-muted-foreground line-through"
-                          : "text-foreground",
-                      ].join(" ")}
-                    >
+                    <p className="truncate text-sm font-semibold text-foreground">
                       {item.name}
                     </p>
-                   <p className="text-xs text-muted-foreground">
-  {item.quantity} {item.unit || ""} · {formatCurrency(Number(item.price) * Number(item.quantity) || 1)}
-</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.quantity} {item.unit || ""} · {formatCurrency(Number(item.price))}
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    aria-label="Restore to To Buy"
+                    onClick={() => setItemState.mutate({ item, state: "reset" })}
+                    className="press flex h-9 items-center gap-1 rounded-full bg-secondary px-3 text-xs font-semibold text-secondary-foreground"
+                  >
+                    Restore
+                  </button>
                   <button
                     type="button"
                     aria-label="Edit item"
