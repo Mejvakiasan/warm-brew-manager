@@ -591,15 +591,9 @@ function GroceryPage() {
                 <Flag className="mr-2 h-4 w-4" />
                 {finalizePurchase.isPending ? "Finalizing…" : "Final Purchase"}
               </Button>
-              {!canFinalize && (
+              {skippedCount > 0 && (
                 <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                  Mark every item green or red to finalize this trip.
-                </p>
-              )}
-              {canFinalize && skippedCount > 0 && (
-                <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                  {skippedCount} red item{skippedCount === 1 ? "" : "s"} will move to tomorrow's
-                  list.
+                  {skippedCount} skipped item{skippedCount === 1 ? "" : "s"} will move to tomorrow's list.
                 </p>
               )}
             </div>
