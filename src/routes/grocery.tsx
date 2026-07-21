@@ -311,35 +311,44 @@ function GroceryPage() {
   const finalizePurchase = useMutation({
     mutationFn: async () => {
       if (!todayList) throw new Error("No active list");
-      const skippedItems = items.filter((i) => i.skipped && !i.bought);
+      const skippedItems = items.filter((i) => i.skipped);
+      const toBuyItems = items.filter((i) => !i.skipped);
 
-      // Ensure tomorrow's list exists
-      let tomorrow: GroceryList | null = null;
-      const { data: existing, error: fetchErr } = await supabase
-        .from("grocery_lists")
-        .select("*")
-        .eq("date", tomorrowISO())
-        .eq("completed", false)
-        .maybeSingle();
-      if (fetchErr) throw fetchErr;
-      tomorrow = existing;
-      if (!tomorrow) {
-        const { data: created, error: createErr } = await supabase
-          .from("grocery_lists")
-          .insert({ date: tomorrowISO(), budget: Number(todayList.budget) || 0 })
-          .select()
-          .single();
-        if (createErr) throw createErr;
-        tomorrow = created;
+      if (toBuyItems.length > 0) {
+        const { error: buyErr } = await supabase
+          .from("grocery_items")
+          .update({ bought: true })
+          .in("id", toBuyItems.map((i) => i.id));
+        if (buyErr) throw buyErr;
       }
 
-      if (skippedItems.length > 0 && tomorrow) {
+      if (skippedItems.length > 0) {
+        let tomorrow: GroceryList | null = null;
+        const { data: existing, error: fetchErr } = await supabase
+          .from("grocery_lists")
+          .select("*")
+          .eq("date", tomorrowISO())
+          .eq("completed", false)
+          .maybeSingle();
+        if (fetchErr) throw fetchErr;
+        tomorrow = existing;
+        if (!tomorrow) {
+          const { data: created, error: createErr } = await supabase
+            .from("grocery_lists")
+            .insert({ date: tomorrowISO(), budget: Number(todayList.budget) || 0 })
+            .select()
+            .single();
+          if (createErr) throw createErr;
+          tomorrow = created;
+        }
         const rows = skippedItems.map((i) => ({
           list_id: tomorrow!.id,
           name: i.name,
           quantity: Number(i.quantity) || 0,
           unit: i.unit,
           price: Number(i.price) || 0,
+          bought: false,
+          skipped: false,
         }));
         const { error: insErr } = await supabase.from("grocery_items").insert(rows);
         if (insErr) throw insErr;
@@ -361,6 +370,7 @@ function GroceryPage() {
       );
       queryClient.invalidateQueries({ queryKey: ["grocery-list", todayISO()] });
       queryClient.invalidateQueries({ queryKey: ["grocery-lists-history"] });
+      setTab("history");
     },
     onError: (e: Error) => toast.error(e.message || "Could not finalize"),
   });
