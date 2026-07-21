@@ -63,18 +63,19 @@ export class LocalLedgerProvider implements LedgerProvider {
 }
 
 /**
- * Supabase ledger provider for persisting entries to the database
+ * Supabase ledger provider — backed by the existing `transactions` table.
+ * Each ledger entry is a transaction row (product: null, status: "unpaid").
+ * The customer's balance is maintained by the tg_transactions_balance trigger.
  */
 export class SupabaseLedgerProvider implements LedgerProvider {
   constructor(private supabaseClient: any) {}
 
   async getEntries(customerId: string): Promise<Entry[]> {
     const { data, error } = await this.supabaseClient
-      .from("customer_entries")
-      .select("*")
+      .from("transactions")
+      .select("id, customer_id, date_time, amount")
       .eq("customer_id", customerId)
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("date_time", { ascending: false });
 
     if (error) {
       throw new Error(error.message || "Failed to fetch entries from database");
@@ -83,41 +84,44 @@ export class SupabaseLedgerProvider implements LedgerProvider {
     return (data ?? []).map((row: any) => ({
       id: row.id,
       customerId: row.customer_id,
-      date: row.date,
+      date: String(row.date_time).slice(0, 10),
       amount: Number(row.amount),
     }));
   }
 
   async addEntry(customerId: string, date: string, amount: number): Promise<Entry> {
+    // Preserve the chosen calendar date but use current time-of-day.
+    const now = new Date();
+    const iso = `${date}T${now.toTimeString().slice(0, 8)}`;
+    const dateTime = new Date(iso).toISOString();
+
     const { data, error } = await this.supabaseClient
-      .from("customer_entries")
+      .from("transactions")
       .insert({
         customer_id: customerId,
-        date,
+        date_time: dateTime,
         amount,
+        product: null,
+        status: "unpaid",
       })
-      .select()
+      .select("id, customer_id, date_time, amount")
       .single();
 
     if (error) {
       throw new Error(error.message || "Failed to add entry to database");
     }
 
-    if (!data) {
-      throw new Error("No data returned from insert");
-    }
-
     return {
       id: data.id,
       customerId: data.customer_id,
-      date: data.date,
+      date: String(data.date_time).slice(0, 10),
       amount: Number(data.amount),
     };
   }
 
   async deleteEntry(id: string): Promise<void> {
     const { error } = await this.supabaseClient
-      .from("customer_entries")
+      .from("transactions")
       .delete()
       .eq("id", id);
 
@@ -126,3 +130,4 @@ export class SupabaseLedgerProvider implements LedgerProvider {
     }
   }
 }
+
