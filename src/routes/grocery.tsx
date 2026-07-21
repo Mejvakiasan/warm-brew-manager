@@ -815,7 +815,7 @@ function GroceryPage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                          Final purchased list
+                          Purchased
                         </p>
                         <span className="text-[10px] text-muted-foreground">
                           {purchased.length} item{purchased.length === 1 ? "" : "s"}
