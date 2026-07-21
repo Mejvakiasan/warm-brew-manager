@@ -381,9 +381,8 @@ function GroceryPage() {
   );
   const remaining = (Number(todayList?.budget) || 0) - spent;
 
-  const boughtCount = items.filter((i) => i.bought).length;
-  const skippedCount = items.filter((i) => i.skipped && !i.bought).length;
-  const canFinalize = items.length > 0 && boughtCount + skippedCount === items.length;
+  const skippedCount = items.filter((i) => i.skipped).length;
+  const canFinalize = items.length > 0;
   const startEdit = (item: GroceryItem) => {
     setEditingId(item.id);
     setEditName(item.name);
