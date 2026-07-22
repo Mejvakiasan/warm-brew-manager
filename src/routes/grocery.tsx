@@ -1005,18 +1005,26 @@ function GroceryPage() {
               />
               {showSuggestions && filteredSuggestions.length > 0 && (
                 <div className="glass absolute inset-x-0 top-full z-50 mt-1 max-h-48 overflow-y-auto p-1.5">
-                  {filteredSuggestions.map((n) => (
+                  {filteredSuggestions.map((s) => (
                     <button
-                      key={n}
+                      key={`${s.source}:${s.name}`}
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
-                        setItemName(n);
+                        setItemName(s.name);
+                        if (s.source === "stock" && typeof s.price === "number") {
+                          setItemPrice(String(s.price));
+                        }
                         setShowSuggestions(false);
                       }}
-                      className="press block w-full rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted/70"
+                      className="press flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted/70"
                     >
-                      {n}
+                      <span className="truncate">{s.name}</span>
+                      {s.source === "stock" && (
+                        <span className="mono-amount shrink-0 text-xs text-secondary">
+                          {formatCurrency(s.price ?? 0)}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
