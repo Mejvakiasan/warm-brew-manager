@@ -120,42 +120,35 @@ function GroceryPage() {
     },
   });
 
-  // Past lists (history) — any finalized/completed trip, regardless of date
-  const { data: pastLists = [] } = useQuery({
-    queryKey: ["grocery-lists-history"],
-    enabled: tab === "history",
-    queryFn: async (): Promise<GroceryList[]> => {
+  // Stock products for autocomplete (with price)
+  const { data: stockSuggestions = [] } = useQuery({
+    queryKey: ["stock-name-price"],
+    queryFn: async (): Promise<{ name: string; price: number }[]> => {
       const { data, error } = await supabase
-        .from("grocery_lists")
-        .select("*")
-        .eq("completed", true)
-        .order("date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(30);
+        .from("stock")
+        .select("product_name, price")
+        .order("product_name", { ascending: true });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map((r) => ({
+        name: r.product_name,
+        price: Number(r.price) || 0,
+      }));
     },
   });
 
-  const { data: historyItems = [] } = useQuery({
-    queryKey: ["grocery-items", expandedHistoryId],
-    enabled: !!expandedHistoryId,
-    queryFn: async (): Promise<GroceryItem[]> => {
-      const { data, error } = await supabase
-        .from("grocery_items")
-        .select("*")
-        .eq("list_id", expandedHistoryId!)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const filteredSuggestions = useMemo(() => {
+  type Suggestion = { name: string; source: "stock" | "history"; price?: number };
+  const filteredSuggestions = useMemo<Suggestion[]>(() => {
     const q = itemName.trim().toLowerCase();
-    if (!q) return pastNames.slice(0, 8);
-    return pastNames.filter((n) => n.toLowerCase().includes(q)).slice(0, 8);
-  }, [itemName, pastNames]);
+    const stockNames = new Set(stockSuggestions.map((s) => s.name.toLowerCase()));
+    const stockList: Suggestion[] = stockSuggestions
+      .filter((s) => !q || s.name.toLowerCase().includes(q))
+      .map((s) => ({ name: s.name, source: "stock", price: s.price }));
+    const historyList: Suggestion[] = pastNames
+      .filter((n) => !stockNames.has(n.toLowerCase()))
+      .filter((n) => !q || n.toLowerCase().includes(q))
+      .map((n) => ({ name: n, source: "history" }));
+    return [...stockList, ...historyList].slice(0, 8);
+  }, [itemName, pastNames, stockSuggestions]);
 
   const createList = useMutation({
     mutationFn: async () => {
