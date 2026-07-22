@@ -120,6 +120,22 @@ function GroceryPage() {
     },
   });
 
+  // Stock products for autocomplete (with price)
+  const { data: stockSuggestions = [] } = useQuery({
+    queryKey: ["stock-name-price"],
+    queryFn: async (): Promise<{ name: string; price: number }[]> => {
+      const { data, error } = await supabase
+        .from("stock")
+        .select("product_name, price")
+        .order("product_name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        name: r.product_name,
+        price: Number(r.price) || 0,
+      }));
+    },
+  });
+
   // Past lists (history) — any finalized/completed trip, regardless of date
   const { data: pastLists = [] } = useQuery({
     queryKey: ["grocery-lists-history"],
@@ -151,11 +167,19 @@ function GroceryPage() {
     },
   });
 
-  const filteredSuggestions = useMemo(() => {
+  type Suggestion = { name: string; source: "stock" | "history"; price?: number };
+  const filteredSuggestions = useMemo<Suggestion[]>(() => {
     const q = itemName.trim().toLowerCase();
-    if (!q) return pastNames.slice(0, 8);
-    return pastNames.filter((n) => n.toLowerCase().includes(q)).slice(0, 8);
-  }, [itemName, pastNames]);
+    const stockNames = new Set(stockSuggestions.map((s) => s.name.toLowerCase()));
+    const stockList: Suggestion[] = stockSuggestions
+      .filter((s) => !q || s.name.toLowerCase().includes(q))
+      .map((s) => ({ name: s.name, source: "stock" as const, price: s.price }));
+    const historyList: Suggestion[] = pastNames
+      .filter((n) => !stockNames.has(n.toLowerCase()))
+      .filter((n) => !q || n.toLowerCase().includes(q))
+      .map((n) => ({ name: n, source: "history" as const }));
+    return [...stockList, ...historyList].slice(0, 8);
+  }, [itemName, pastNames, stockSuggestions]);
 
   const createList = useMutation({
     mutationFn: async () => {
@@ -981,18 +1005,26 @@ function GroceryPage() {
               />
               {showSuggestions && filteredSuggestions.length > 0 && (
                 <div className="glass absolute inset-x-0 top-full z-50 mt-1 max-h-48 overflow-y-auto p-1.5">
-                  {filteredSuggestions.map((n) => (
+                  {filteredSuggestions.map((s) => (
                     <button
-                      key={n}
+                      key={`${s.source}:${s.name}`}
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
-                        setItemName(n);
+                        setItemName(s.name);
+                        if (s.source === "stock" && typeof s.price === "number") {
+                          setItemPrice(String(s.price));
+                        }
                         setShowSuggestions(false);
                       }}
-                      className="press block w-full rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted/70"
+                      className="press flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted/70"
                     >
-                      {n}
+                      <span className="truncate">{s.name}</span>
+                      {s.source === "stock" && (
+                        <span className="mono-amount shrink-0 text-xs text-secondary">
+                          {formatCurrency(s.price ?? 0)}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

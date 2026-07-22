@@ -2,18 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Package, Trash2 } from "lucide-react";
+import { Plus, Package, Trash2, Pencil } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +14,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { formatCurrency } from "@/lib/format";
@@ -33,16 +36,14 @@ export const Route = createFileRoute("/stock")({
 
 type Stock = Tables<"stock">;
 
-const UNITS = ["kg", "g", "litre", "ml", "piece", "packet", "box", "dozen"];
-
 function StockPage() {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Stock | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Stock | null>(null);
 
   const [productName, setProductName] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [unit, setUnit] = useState("kg");
   const [price, setPrice] = useState("");
   const [imageUrl, setImageUrl] = useState("");
 
@@ -60,34 +61,51 @@ function StockPage() {
 
   const resetForm = () => {
     setProductName("");
-    setQuantity("");
-    setUnit("kg");
     setPrice("");
     setImageUrl("");
+    setEditing(null);
   };
 
-  const addProduct = useMutation({
+  const openAdd = () => {
+    resetForm();
+    setOpen(true);
+  };
+
+  const openEdit = (p: Stock) => {
+    setEditing(p);
+    setProductName(p.product_name);
+    setPrice(String(p.price ?? ""));
+    setImageUrl(p.image_url ?? "");
+    setOpen(true);
+  };
+
+  const saveProduct = useMutation({
     mutationFn: async () => {
       const trimmed = productName.trim();
       if (!trimmed) throw new Error("Product name is required");
-      const qty = Number(quantity) || 0;
       const prc = Number(price) || 0;
-      const { error } = await supabase.from("stock").insert({
+      const payload = {
         product_name: trimmed,
-        quantity: qty,
-        unit,
         price: prc,
         image_url: imageUrl.trim() || null,
-      });
-      if (error) throw error;
+      };
+      if (editing) {
+        const { error } = await supabase.from("stock").update(payload).eq("id", editing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("stock")
+          .insert({ ...payload, quantity: 0, unit: "" });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
-      toast.success("Product added");
+      toast.success(editing ? "Product updated" : "Product added");
       queryClient.invalidateQueries({ queryKey: ["stock"] });
       resetForm();
       setOpen(false);
     },
-    onError: (e: Error) => toast.error(e.message || "Could not add product"),
+    onError: (e: Error) => toast.error(e.message || "Could not save product"),
   });
 
   const deleteProduct = useMutation({
@@ -98,32 +116,18 @@ function StockPage() {
     onSuccess: () => {
       toast.success("Product removed");
       queryClient.invalidateQueries({ queryKey: ["stock"] });
+      setConfirmDelete(null);
     },
     onError: (e: Error) => toast.error(e.message || "Could not remove product"),
   });
 
-  const totalValue = products.reduce(
-    (sum, p) => sum + Number(p.quantity) * Number(p.price),
-    0,
-  );
-
   return (
-    <AppShell title="Stock" subtitle="Products and inventory" showFab={false}>
-      <div className="solid-card mb-4 flex items-center justify-between p-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Total stock value
-          </p>
-          <p className="mono-amount mt-1 text-2xl text-secondary">
-            {formatCurrency(totalValue)}
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Products
-          </p>
-          <p className="mono-amount mt-1 text-2xl text-secondary">{products.length}</p>
-        </div>
+    <AppShell title="Stock" subtitle="Product catalog" showFab={false}>
+      <div className="solid-card mb-4 p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Total products
+        </p>
+        <p className="mono-amount mt-1 text-2xl text-secondary">{products.length}</p>
       </div>
 
       {isLoading && (
@@ -150,14 +154,24 @@ function StockPage() {
         {products.map((p) => (
           <div key={p.id} className="glass press relative p-4">
             {isAdmin && (
-              <button
-                type="button"
-                aria-label="Delete product"
-                onClick={() => deleteProduct.mutate(p.id)}
-                className="absolute right-2 top-2 z-10 grid h-7 w-7 place-items-center rounded-full bg-card/80"
-              >
-                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-              </button>
+              <div className="absolute right-2 top-2 z-10 flex gap-1">
+                <button
+                  type="button"
+                  aria-label="Edit product"
+                  onClick={() => openEdit(p)}
+                  className="grid h-7 w-7 place-items-center rounded-full bg-card/80"
+                >
+                  <Pencil className="h-3.5 w-3.5 text-secondary" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Delete product"
+                  onClick={() => setConfirmDelete(p)}
+                  className="grid h-7 w-7 place-items-center rounded-full bg-card/80"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </button>
+              </div>
             )}
             <div className="grid aspect-square place-items-center overflow-hidden rounded-xl bg-muted/60">
               {p.image_url ? (
@@ -174,11 +188,8 @@ function StockPage() {
               )}
             </div>
             <p className="mt-3 truncate text-sm font-semibold">{p.product_name}</p>
-            <p className="text-xs text-muted-foreground">
-              {p.quantity} {p.unit || ""}
-            </p>
             <p className="mono-amount mt-1 text-lg text-secondary">
-              {formatCurrency(Number(p.quantity) * Number(p.price))}
+              {formatCurrency(Number(p.price))}
             </p>
           </div>
         ))}
@@ -186,17 +197,25 @@ function StockPage() {
 
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openAdd}
         aria-label="Add product"
         className="press fixed right-5 bottom-24 z-40 grid h-14 w-14 place-items-center rounded-full gradient-warm shadow-[var(--shadow-pop)]"
       >
         <Plus className="h-7 w-7 text-primary-foreground" strokeWidth={2.5} />
       </button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v) resetForm();
+        }}
+      >
         <DialogContent className="bg-card">
           <DialogHeader>
-            <DialogTitle className="font-display">Add product</DialogTitle>
+            <DialogTitle className="font-display">
+              {editing ? "Edit product" : "Add product"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -209,34 +228,6 @@ function StockPage() {
                 className="h-12"
                 autoFocus
               />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="p-qty">Quantity</Label>
-                <Input
-                  id="p-qty"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="0"
-                  className="h-12"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Unit</Label>
-                <Select value={unit} onValueChange={setUnit}>
-                  <SelectTrigger className="h-12">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {UNITS.map((u) => (
-                      <SelectItem key={u} value={u}>
-                        {u}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="p-price">Price</Label>
@@ -262,15 +253,40 @@ function StockPage() {
           </div>
           <DialogFooter>
             <Button
-              onClick={() => addProduct.mutate()}
-              disabled={addProduct.isPending || !productName.trim()}
+              onClick={() => saveProduct.mutate()}
+              disabled={saveProduct.isPending || !productName.trim()}
               className="press h-12 w-full rounded-2xl gradient-warm text-base font-semibold"
             >
-              {addProduct.isPending ? "Adding…" : "Add product"}
+              {saveProduct.isPending
+                ? "Saving…"
+                : editing
+                  ? "Save changes"
+                  : "Add product"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!confirmDelete}
+        onOpenChange={(v) => !v && setConfirmDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {confirmDelete?.product_name}?</AlertDialogTitle>
+            <AlertDialogDescription>This can't be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmDelete && deleteProduct.mutate(confirmDelete.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
