@@ -17,8 +17,10 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/hooks/use-theme";
 import { listUsersForAdmin, promoteUserToAdmin } from "@/lib/auth.functions";
-import { ShieldCheck, LogOut } from "lucide-react";
+import { Moon, ShieldCheck, LogOut, Sun } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const LANGUAGES = [
   { value: "en", label: "English" },
@@ -55,6 +57,7 @@ function SettingsPage() {
   const { data: settings } = useSuspenseQuery(appSettingsQuery);
   const queryClient = useQueryClient();
   const { isAdmin, user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const [shopName, setShopName] = useState(settings?.shop_name ?? "");
   const [language, setLanguage] = useState(settings?.default_language ?? "en");
@@ -148,6 +151,19 @@ function SettingsPage() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 border-t border-border pt-5">
+          <div className="flex items-center gap-3">
+            {theme === "dark" ? <Moon className="h-5 w-5 text-primary" /> : <Sun className="h-5 w-5 text-primary" />}
+            <div>
+              <Label htmlFor="dark-mode" className="text-sm font-semibold">
+                Dark mode
+              </Label>
+              <p className="text-xs text-muted-foreground">Use a warmer, lower-light color scheme</p>
+            </div>
+          </div>
+          <Switch id="dark-mode" checked={theme === "dark"} onCheckedChange={toggleTheme} />
         </div>
 
         <Button

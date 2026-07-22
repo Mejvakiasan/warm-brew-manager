@@ -90,6 +90,49 @@
     linear-gradient(180deg, oklch(0.982 0.018 82) 0%, oklch(0.96 0.03 72) 100%);
 }
 
+.dark {
+  --background: oklch(0.18 0.025 55);
+  --foreground: oklch(0.94 0.025 82);
+
+  --card: oklch(0.235 0.03 52);
+  --card-foreground: oklch(0.94 0.025 82);
+
+  --popover: oklch(0.235 0.03 52);
+  --popover-foreground: oklch(0.94 0.025 82);
+
+  --primary: oklch(0.72 0.18 52);
+  --primary-foreground: oklch(0.18 0.025 55);
+
+  --secondary: oklch(0.62 0.17 39);
+  --secondary-foreground: oklch(0.98 0.018 82);
+
+  --muted: oklch(0.29 0.03 55);
+  --muted-foreground: oklch(0.74 0.035 75);
+
+  --accent: oklch(0.34 0.055 58);
+  --accent-foreground: oklch(0.95 0.025 82);
+
+  --destructive: oklch(0.68 0.2 27);
+  --destructive-foreground: oklch(0.98 0.018 82);
+
+  --border: oklch(0.38 0.035 58);
+  --input: oklch(0.34 0.03 58);
+  --ring: oklch(0.72 0.18 52);
+
+  --success: oklch(0.76 0.16 148);
+  --warning: oklch(0.84 0.16 78);
+  --danger: oklch(0.7 0.2 27);
+
+  --gradient-warm: linear-gradient(135deg, oklch(0.72 0.18 52) 0%, oklch(0.62 0.17 39) 100%);
+  --gradient-bg: radial-gradient(1200px 800px at 10% -10%, oklch(0.3 0.07 55 / 0.7), transparent 60%),
+    radial-gradient(900px 700px at 100% 0%, oklch(0.28 0.08 40 / 0.55), transparent 55%),
+    linear-gradient(180deg, oklch(0.18 0.025 55) 0%, oklch(0.22 0.035 48) 100%);
+
+  --shadow-glass: 0 8px 32px -8px oklch(0.05 0.02 45 / 0.45);
+  --shadow-soft: 0 4px 16px -4px oklch(0.05 0.02 45 / 0.3);
+  --shadow-pop: 0 12px 40px -8px oklch(0.05 0.02 45 / 0.5);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
