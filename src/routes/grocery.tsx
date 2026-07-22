@@ -136,17 +136,48 @@ function GroceryPage() {
     },
   });
 
+  // Past lists (history) — any finalized/completed trip, regardless of date
+  const { data: pastLists = [] } = useQuery({
+    queryKey: ["grocery-lists-history"],
+    enabled: tab === "history",
+    queryFn: async (): Promise<GroceryList[]> => {
+      const { data, error } = await supabase
+        .from("grocery_lists")
+        .select("*")
+        .eq("completed", true)
+        .order("date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: historyItems = [] } = useQuery({
+    queryKey: ["grocery-items", expandedHistoryId],
+    enabled: !!expandedHistoryId,
+    queryFn: async (): Promise<GroceryItem[]> => {
+      const { data, error } = await supabase
+        .from("grocery_items")
+        .select("*")
+        .eq("list_id", expandedHistoryId!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   type Suggestion = { name: string; source: "stock" | "history"; price?: number };
   const filteredSuggestions = useMemo<Suggestion[]>(() => {
     const q = itemName.trim().toLowerCase();
     const stockNames = new Set(stockSuggestions.map((s) => s.name.toLowerCase()));
     const stockList: Suggestion[] = stockSuggestions
       .filter((s) => !q || s.name.toLowerCase().includes(q))
-      .map((s) => ({ name: s.name, source: "stock", price: s.price }));
+      .map((s) => ({ name: s.name, source: "stock" as const, price: s.price }));
     const historyList: Suggestion[] = pastNames
       .filter((n) => !stockNames.has(n.toLowerCase()))
       .filter((n) => !q || n.toLowerCase().includes(q))
-      .map((n) => ({ name: n, source: "history" }));
+      .map((n) => ({ name: n, source: "history" as const }));
     return [...stockList, ...historyList].slice(0, 8);
   }, [itemName, pastNames, stockSuggestions]);
 
