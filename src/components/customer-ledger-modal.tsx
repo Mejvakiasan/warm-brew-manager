@@ -1,5 +1,9 @@
-import { useState, useEffect } from "react";
-import { Trash2, Plus, CheckCircle2, Circle, X, Check } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { toast } from "sonner";
+import { Plus, ChevronRight, Phone, Trash2, Search, X, CheckCircle2, Circle, Check } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,352 +12,380 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { formatCurrency } from "@/lib/format";
-import type { Entry, LedgerProvider } from "@/integrations/ledger-provider";
+import { CustomerLedgerModal } from "@/components/customer-ledger-modal";
+import { SupabaseLedgerProvider } from "@/integrations/ledger-provider";
+import { useAuth } from "@/hooks/use-auth";
 
-interface CustomerLedgerModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  customerId: string;
-  customerName: string;
-  provider: LedgerProvider;
-  onBalanceChange?: () => void;
-}
+export const Route = createFileRoute("/customers")({
+  component: CustomersPage,
+  head: () => ({ meta: [{ title: "Customers — Divakar Tea Shop" }] }),
+});
 
-export function CustomerLedgerModal({
-  open,
-  onOpenChange,
-  customerId,
-  customerName,
-  provider,
-  onBalanceChange,
-}: CustomerLedgerModalProps) {
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [amount, setAmount] = useState("");
-  const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
-  );
-  const [isLoading, setIsLoading] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [partialAmount, setPartialAmount] = useState("");
-  const [statusBusy, setStatusBusy] = useState(false);
+type Customer = Tables<"customers">;
 
-  // Load entries when modal opens
-  useEffect(() => {
-    if (!open) return;
+function CustomersPage() {
+  const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [search, setSearch] = useState("");
+  const [settleExpandedId, setSettleExpandedId] = useState<string | null>(null);
+  const [settlePartialAmount, setSettlePartialAmount] = useState("");
+  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
-    const loadEntries = async () => {
-      try {
-        setIsLoading(true);
-        const loadedEntries = await provider.getEntries(customerId);
-        setEntries(loadedEntries);
-      } catch (error) {
-        toast.error("Failed to load entries");
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Create ledger provider (Supabase)
+  const ledgerProvider = useMemo(() => new SupabaseLedgerProvider(supabase), []);
 
-    loadEntries();
-  }, [open, customerId, provider]);
-
-  // Group entries by date
-  const entriesByDate = entries.reduce(
-    (acc, entry) => {
-      if (!acc[entry.date]) {
-        acc[entry.date] = [];
-      }
-      acc[entry.date].push(entry);
-      return acc;
+  const { data: customers = [], isLoading, error } = useQuery({
+    queryKey: ["customers"],
+    queryFn: async (): Promise<Customer[]> => {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("*")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
     },
-    {} as Record<string, Entry[]>
-  );
+  });
 
-  const totalAmount = entries.reduce((sum, e) => sum + Number(e.amount), 0);
+  const addCustomer = useMutation({
+    mutationFn: async () => {
+      const trimmed = name.trim();
+      if (!trimmed) throw new Error("Name is required");
+      const { data, error } = await supabase
+        .from("customers")
+        .insert({ name: trimmed, phone: phone.trim() || null })
+        .select()
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Customer added");
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setName("");
+      setPhone("");
+      setOpen(false);
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not add customer"),
+  });
 
-  const handleAddEntry = async () => {
-    const parsedAmount = parseFloat(amount);
-    if (!amount.trim() || isNaN(parsedAmount) || parsedAmount <= 0) {
-      toast.error("Please enter a valid amount");
-      return;
-    }
+   const deleteCustomer = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("customers").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Customer removed");
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not remove customer"),
+  });
 
-    try {
-      const newEntry = await provider.addEntry(customerId, selectedDate, parsedAmount);
-      const updatedEntries = [...entries, newEntry];
-      setEntries(updatedEntries);
-      setAmount("");
-      toast.success("Entry added");
-      onBalanceChange?.();
-    } catch (error: any) {
-      const errorMessage = error?.message || error?.error_description || "Failed to add entry";
-      toast.error(errorMessage);
-      console.error("Add entry error:", error);
-    }
-  };
+  const settleBalance = useMutation({
+    mutationFn: async ({ customer, amount }: { customer: Customer; amount: number }) => {
+      if (!amount || amount <= 0) throw new Error("Enter a valid amount");
+      const { error } = await supabase.from("payments").insert({
+        customer_id: customer.id,
+        date: new Date().toISOString().slice(0, 10),
+        amount_paid: amount,
+      });
+      if (error) throw error;
+      return amount;
+    },
+    onSuccess: (amount, { customer }) => {
+      toast.success(`${formatCurrency(amount)} recorded for ${customer.name}`);
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setSettleExpandedId(null);
+      setSettlePartialAmount("");
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not record payment"),
+  });
 
-  const handleDeleteEntry = async (id: string) => {
-    try {
-      await provider.deleteEntry(id);
-      const updatedEntries = entries.filter((e) => e.id !== id);
-      setEntries(updatedEntries);
-      toast.success("Entry deleted");
-      onBalanceChange?.();
-    } catch (error: any) {
-      const errorMessage = error?.message || error?.error_description || "Failed to delete entry";
-      toast.error(errorMessage);
-      console.error("Delete entry error:", error);
-    }
-  };
+  const totalOwed = customers.reduce((sum, c) => sum + Number(c.balance), 0);
 
-  const handleMarkPaid = async (
-    entry: Entry,
-    status: "paid" | "partial",
-    amountPaid: number,
-  ) => {
-    setStatusBusy(true);
-    try {
-      const updated = await provider.markPaid(entry.id, customerId, status, amountPaid);
-      setEntries((prev) => prev.map((e) => (e.id === entry.id ? updated : e)));
-      toast.success(
-        status === "paid"
-          ? `Marked paid — ${formatCurrency(amountPaid)}`
-          : `Marked partial — ${formatCurrency(amountPaid)} recorded`,
-      );
-      setExpandedId(null);
-      setPartialAmount("");
-      onBalanceChange?.();
-    } catch (error: any) {
-      toast.error(error?.message || "Could not update status");
-    } finally {
-      setStatusBusy(false);
-    }
-  };
+  const filteredCustomers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.phone ?? "").toLowerCase().includes(q),
+    );
+  }, [customers, search]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto bg-card">
-        <DialogHeader>
-          <DialogTitle className="font-display">{customerName} — Entries</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Add Entry Form */}
-          <div className="space-y-3 border-b pb-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="entry-date" className="text-xs">
-                  Date
-                </Label>
-                <input
-                  id="entry-date"
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  max={new Date().toISOString().split("T")[0]}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="entry-amount" className="text-xs">
-                  Amount (₹)
-                </Label>
-                <Input
-                  id="entry-amount"
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="e.g. 50"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  className="h-10"
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter") {
-                      handleAddEntry();
-                    }
-                  }}
-                />
-              </div>
-            </div>
-            <Button
-              onClick={handleAddEntry}
-              disabled={isLoading || !amount.trim()}
-              className="press h-10 w-full rounded-lg gradient-warm text-sm font-semibold text-primary-foreground"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              {isLoading ? "Adding…" : "Add Entry"}
-            </Button>
-          </div>
-
-          {/* Entries List */}
-          {isLoading ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              Loading entries…
-            </div>
-          ) : entries.length === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              No entries yet. Add one above to get started.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {Object.entries(entriesByDate)
-                .sort(([dateA], [dateB]) => dateB.localeCompare(dateA))
-                .map(([date, dateEntries]) => {
-                  const dateTotal = dateEntries.reduce(
-                    (sum, e) => sum + Number(e.amount),
-                    0
-                  );
-                  const dateObj = new Date(date);
-                  const formattedDate = dateObj.toLocaleDateString("en-IN", {
-                    weekday: "short",
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  });
-
-                  return (
-                    <div key={date} className="space-y-2 rounded-lg border border-muted bg-muted/30 p-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-foreground">
-                          {formattedDate}
-                        </p>
-                        <p className="mono-amount text-sm font-bold text-secondary">
-                          {formatCurrency(dateTotal)}
-                        </p>
-                      </div>
-                      <div className="space-y-1">
-                        {dateEntries.map((entry) => {
-                          const statusStyle =
-                            entry.status === "paid"
-                              ? "bg-[oklch(0.65_0.15_150/0.15)] text-[oklch(0.5_0.15_150)]"
-                              : entry.status === "partial"
-                              ? "bg-[oklch(0.75_0.15_75/0.2)] text-[oklch(0.5_0.15_75)]"
-                              : "bg-destructive/10 text-destructive";
-                          const statusLabel =
-                            entry.status === "paid"
-                              ? "Paid"
-                              : entry.status === "partial"
-                              ? "Partial"
-                              : "Unpaid";
-                          const isExpanded = expandedId === entry.id;
-
-                          return (
-                            <div
-                              key={entry.id}
-                              className="rounded bg-background px-2 py-1.5"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold text-foreground">
-                                  ₹{Number(entry.amount).toFixed(2)}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setExpandedId(isExpanded ? null : entry.id)
-                                    }
-                                    className={`pill press px-2.5 py-0.5 text-[11px] font-semibold ${statusStyle}`}
-                                  >
-                                    {statusLabel}
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteEntry(entry.id)}
-                                    disabled={isLoading}
-                                    className="press rounded p-1 hover:bg-destructive/10"
-                                    aria-label="Delete entry"
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {isExpanded && entry.status !== "paid" && (
-                                <div className="mt-2 space-y-2 border-t border-border/60 pt-2">
-                                  <div className="flex gap-2">
-                                    <button
-                                      type="button"
-                                      disabled={statusBusy}
-                                      onClick={() =>
-                                        handleMarkPaid(entry, "paid", Number(entry.amount))
-                                      }
-                                      className="press flex h-9 flex-1 items-center justify-center gap-1 rounded-lg gradient-warm text-xs font-semibold text-primary-foreground"
-                                    >
-                                      <CheckCircle2 className="h-3.5 w-3.5" /> Mark Paid
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={statusBusy}
-                                      onClick={() => {
-                                        setPartialAmount(String(entry.amount));
-                                        setExpandedId(`partial-${entry.id}`);
-                                      }}
-                                      className="press flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-secondary/15 text-xs font-semibold text-secondary"
-                                    >
-                                      <Circle className="h-3.5 w-3.5" /> Mark Partial
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {expandedId === `partial-${entry.id}` && (
-                                <div className="mt-2 flex items-center gap-2 border-t border-border/60 pt-2">
-                                  <Input
-                                    value={partialAmount}
-                                    onChange={(e) => setPartialAmount(e.target.value)}
-                                    inputMode="decimal"
-                                    placeholder="Amount paid"
-                                    className="h-9 flex-1"
-                                    autoFocus
-                                  />
-                                  <button
-                                    type="button"
-                                    disabled={statusBusy || !Number(partialAmount)}
-                                    onClick={() =>
-                                      handleMarkPaid(entry, "partial", Number(partialAmount))
-                                    }
-                                    className="press grid h-9 w-9 flex-none place-items-center rounded-lg gradient-warm text-primary-foreground"
-                                  >
-                                    <Check className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setExpandedId(null);
-                                      setPartialAmount("");
-                                    }}
-                                    className="press grid h-9 w-9 flex-none place-items-center rounded-lg bg-muted/70"
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          )}
-
-          {/* Total */}
-          {entries.length > 0 && (
-            <div className="border-t pt-4">
-              <div className="flex items-center justify-between rounded-lg bg-linear-to-br from-secondary/5 to-secondary/10 p-3">
-                <p className="text-sm font-semibold text-muted-foreground">Total</p>
-                <p className="mono-amount text-lg font-bold text-secondary">
-                  {formatCurrency(totalAmount)}
-                </p>
-              </div>
-            </div>
-          )}
+    <AppShell title="Customers" subtitle="Accounts and balances" showFab={false}>
+      <div className="solid-card mb-4 flex items-center justify-between p-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Total outstanding
+          </p>
+          <p className="mono-amount mt-1 text-2xl text-secondary">
+            {formatCurrency(totalOwed)}
+          </p>
         </div>
-      </DialogContent>
-    </Dialog>
+        <div className="text-right">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Customers
+          </p>
+          <p className="mono-amount mt-1 text-2xl text-secondary">{customers.length}</p>
+        </div>
+      </div>
+
+      <div className="relative mb-4">
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name or phone…"
+          autoComplete="off"
+          className="h-12 w-full rounded-2xl border border-input bg-card pl-10 pr-10 text-sm outline-none focus:border-primary"
+        />
+        {search && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={() => setSearch("")}
+            className="press absolute right-3 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full bg-muted/70"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {isLoading && (
+        <div className="solid-card p-6 text-center text-sm text-muted-foreground">
+          Loading customers…
+        </div>
+      )}
+      {error && (
+        <div className="solid-card p-6 text-center text-sm text-destructive">
+          {(error as Error).message}
+        </div>
+      )}
+
+      {!isLoading && customers.length === 0 && (
+        <div className="solid-card p-8 text-center">
+          <p className="text-sm text-muted-foreground">No customers yet.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Tap the + button to add your first customer.
+          </p>
+        </div>
+      )}
+
+      {!isLoading && customers.length > 0 && filteredCustomers.length === 0 && (
+        <div className="solid-card p-8 text-center">
+          <p className="text-sm text-muted-foreground">No customers match "{search}".</p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {filteredCustomers.map((c) => (
+          <div key={c.id} className="solid-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={() => {
+                  setSelectedCustomer({ id: c.id, name: c.name });
+                  setLedgerOpen(true);
+                }}
+                className="press min-w-0 flex-1 text-left hover:opacity-80"
+              >
+                <p className="truncate text-base font-semibold text-foreground">{c.name}</p>
+                {c.phone && (
+                  <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+                    <Phone className="h-3 w-3" /> {c.phone}
+                  </p>
+                )}
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Balance
+                  </p>
+                  <p
+                    className={[
+                      "mono-amount text-lg",
+                      Number(c.balance) > 0 ? "text-secondary" : "text-muted-foreground",
+                    ].join(" ")}
+                  >
+                    {formatCurrency(Number(c.balance))}
+                  </p>
+                </div>
+
+                {Number(c.balance) > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSettleExpandedId(settleExpandedId === c.id ? null : c.id)
+                    }
+                    className="pill press bg-destructive/10 px-2.5 py-1 text-[11px] font-semibold text-destructive"
+                  >
+                    Unpaid
+                  </button>
+                ) : (
+                  <span className="pill inline-flex items-center gap-1 bg-[oklch(0.65_0.15_150/0.15)] px-2.5 py-1 text-[11px] font-semibold text-[oklch(0.5_0.15_150)]">
+                    <CheckCircle2 className="h-3 w-3" /> Paid
+                  </span>
+                )}
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    aria-label={`Delete ${c.name}`}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Delete ${c.name}? This removes their record and all transaction/payment history. This can't be undone.`,
+                        )
+                      ) {
+                        deleteCustomer.mutate(c.id);
+                      }
+                    }}
+                    className="press grid h-8 w-8 flex-none place-items-center rounded-full bg-destructive/10"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </button>
+                )}
+
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </div>
+
+            {settleExpandedId === c.id && (
+              <div className="mt-3 flex gap-2 border-t border-border/60 pt-3">
+                <button
+                  type="button"
+                  disabled={settleBalance.isPending}
+                  onClick={() =>
+                    settleBalance.mutate({ customer: c, amount: Number(c.balance) })
+                  }
+                  className="press flex h-10 flex-1 items-center justify-center gap-1 rounded-xl gradient-warm text-xs font-semibold text-primary-foreground"
+                >
+                  <CheckCircle2 className="h-4 w-4" /> Mark Paid ({formatCurrency(Number(c.balance))})
+                </button>
+                <button
+                  type="button"
+                  disabled={settleBalance.isPending}
+                  onClick={() => {
+                    setSettlePartialAmount(String(c.balance));
+                    setSettleExpandedId(`partial-${c.id}`);
+                  }}
+                  className="press flex h-10 flex-1 items-center justify-center gap-1 rounded-xl bg-secondary/15 text-xs font-semibold text-secondary"
+                >
+                  <Circle className="h-4 w-4" /> Mark Partial
+                </button>
+              </div>
+            )}
+
+            {settleExpandedId === `partial-${c.id}` && (
+              <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3">
+                <Input
+                  value={settlePartialAmount}
+                  onChange={(e) => setSettlePartialAmount(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="Amount paid"
+                  className="h-10 flex-1"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  disabled={settleBalance.isPending || !Number(settlePartialAmount)}
+                  onClick={() =>
+                    settleBalance.mutate({ customer: c, amount: Number(settlePartialAmount) })
+                  }
+                  className="press grid h-10 w-10 flex-none place-items-center rounded-xl gradient-warm text-primary-foreground"
+                >
+                  <Check className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettleExpandedId(null);
+                    setSettlePartialAmount("");
+                  }}
+                  className="press grid h-10 w-10 flex-none place-items-center rounded-xl bg-muted/70"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Add customer"
+        className="press fixed right-5 bottom-24 z-40 grid h-14 w-14 place-items-center rounded-full gradient-warm shadow-(--shadow-pop)"
+      >
+        <Plus className="h-7 w-7 text-primary-foreground" strokeWidth={2.5} />
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="bg-card">
+          <DialogHeader>
+            <DialogTitle className="font-display">Add customer</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="c-name">Name</Label>
+              <Input
+                id="c-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Ramesh"
+                className="h-12"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-phone">Phone (optional)</Label>
+              <Input
+                id="c-phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+91…"
+                inputMode="tel"
+                className="h-12"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => addCustomer.mutate()}
+              disabled={addCustomer.isPending || !name.trim()}
+              className="press h-12 w-full rounded-2xl gradient-warm text-base font-semibold"
+            >
+              {addCustomer.isPending ? "Adding…" : "Add customer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {selectedCustomer && (
+        <CustomerLedgerModal
+          open={ledgerOpen}
+          onOpenChange={setLedgerOpen}
+          customerId={selectedCustomer.id}
+          customerName={selectedCustomer.name}
+          provider={ledgerProvider}
+          onBalanceChange={() => {
+            queryClient.invalidateQueries({ queryKey: ["customers"] });
+          }}
+        />
+      )}
+    </AppShell>
   );
 }
