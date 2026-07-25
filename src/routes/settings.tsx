@@ -18,8 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
-import { listUsersForAdmin, promoteUserToAdmin, deactivateUser } from "@/lib/auth.functions";
-import { Moon, ShieldCheck, LogOut, Sun, UserX } from "lucide-react";
+import { listUsersForAdmin, promoteUserToAdmin, deactivateUser, releaseUser } from "@/lib/auth.functions";
+import { Moon, ShieldCheck, LogOut, Sun, UserX, UserCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 const LANGUAGES = [
@@ -197,6 +197,7 @@ function ManageUsers() {
   const listFn = useServerFn(listUsersForAdmin);
   const promoteFn = useServerFn(promoteUserToAdmin);
   const deactivateFn = useServerFn(deactivateUser);
+  const releaseFn = useServerFn(releaseUser);
 
   const { data: users, isLoading, error } = useQuery({
     queryKey: ["admin-users"],
@@ -221,6 +222,15 @@ function ManageUsers() {
     onError: (e: Error) => toast.error(e.message || "Could not remove user"),
   });
 
+  const release = useMutation({
+    mutationFn: (userId: string) => releaseFn({ data: { userId } }),
+    onSuccess: () => {
+      toast.success("User restored — they can sign in again");
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not restore user"),
+  });
+
   return (
     <section className="mt-6">
       <h2 className="mb-3 font-display text-lg font-bold text-secondary">Manage users</h2>
@@ -240,6 +250,21 @@ function ManageUsers() {
               <span className="pill inline-flex items-center gap-1 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                 <ShieldCheck className="h-3.5 w-3.5" /> Admin
               </span>
+            ) : u.isBanned ? (
+              <div className="flex items-center gap-2">
+                <span className="pill inline-flex items-center gap-1 bg-destructive/10 px-3 py-1 text-xs font-semibold text-destructive">
+                  <UserX className="h-3.5 w-3.5" /> Banned
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Restore ${u.name || u.email}`}
+                  onClick={() => release.mutate(u.id)}
+                  disabled={release.isPending}
+                  className="press grid h-8 w-8 flex-none place-items-center rounded-full bg-secondary/15"
+                >
+                  <UserCheck className="h-3.5 w-3.5 text-secondary" />
+                </button>
+              </div>
             ) : (
               <div className="flex items-center gap-2">
                 <Button

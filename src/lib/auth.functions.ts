@@ -137,6 +137,26 @@ export const promoteUserToAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const releaseUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => deactivateSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: isAdmin, error: hrErr } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (hrErr) throw new Error(hrErr.message);
+    if (!isAdmin) throw new Error("Only admins can release users.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
+      ban_duration: "none",
+    });
+    if (error) throw new Error(error.message);
+
+    return { ok: true };
+  });
+
 export const listUsersForAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -156,5 +176,14 @@ export const listUsersForAdmin = createServerFn({ method: "GET" })
     const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
     const adminSet = new Set((roles ?? []).filter((r) => r.role === "admin").map((r) => r.user_id));
 
-    return (users ?? []).map((u) => ({ ...u, isAdmin: adminSet.has(u.id) }));
+    const withBanStatus = await Promise.all(
+      (users ?? []).map(async (u) => {
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(u.id);
+        const bannedUntil = authUser?.user?.banned_until;
+        const isBanned = !!bannedUntil && new Date(bannedUntil) > new Date();
+        return { ...u, isAdmin: adminSet.has(u.id), isBanned };
+      }),
+    );
+
+    return withBanStatus;
   });
