@@ -1,8 +1,11 @@
+export type EntryStatus = "unpaid" | "partial" | "paid";
+
 export interface Entry {
   id: string;
   customerId: string;
   date: string; // ISO date string (YYYY-MM-DD)
   amount: number;
+  status: EntryStatus;
 }
 
 /**
@@ -23,6 +26,18 @@ export interface LedgerProvider {
    * Delete an entry by ID
    */
   deleteEntry(id: string): Promise<void>;
+
+  /**
+   * Mark an entry's payment status. Paying "paid" settles the full amount;
+   * "partial" settles amountPaid. Records a matching payment for the
+   * customer so the balance trigger picks it up.
+   */
+  markPaid(
+    entryId: string,
+    customerId: string,
+    status: "paid" | "partial",
+    amountPaid: number,
+  ): Promise<Entry>;
 }
 
 /**
@@ -45,6 +60,7 @@ export class LocalLedgerProvider implements LedgerProvider {
       customerId,
       date,
       amount,
+      status: "unpaid",
     };
     this.entries.set(id, entry);
     return entry;
@@ -52,6 +68,19 @@ export class LocalLedgerProvider implements LedgerProvider {
 
   async deleteEntry(id: string): Promise<void> {
     this.entries.delete(id);
+  }
+
+  async markPaid(
+    entryId: string,
+    _customerId: string,
+    status: "paid" | "partial",
+    _amountPaid: number,
+  ): Promise<Entry> {
+    const entry = this.entries.get(entryId);
+    if (!entry) throw new Error("Entry not found");
+    const updated = { ...entry, status };
+    this.entries.set(entryId, updated);
+    return updated;
   }
 
   /**
@@ -73,7 +102,7 @@ export class SupabaseLedgerProvider implements LedgerProvider {
   async getEntries(customerId: string): Promise<Entry[]> {
     const { data, error } = await this.supabaseClient
       .from("transactions")
-      .select("id, customer_id, date_time, amount")
+      .select("id, customer_id, date_time, amount, status")
       .eq("customer_id", customerId)
       .order("date_time", { ascending: false });
 
@@ -86,6 +115,7 @@ export class SupabaseLedgerProvider implements LedgerProvider {
       customerId: row.customer_id,
       date: String(row.date_time).slice(0, 10),
       amount: Number(row.amount),
+      status: (row.status ?? "unpaid") as EntryStatus,
     }));
   }
 
@@ -104,7 +134,7 @@ export class SupabaseLedgerProvider implements LedgerProvider {
         product: null,
         status: "unpaid",
       })
-      .select("id, customer_id, date_time, amount")
+      .select("id, customer_id, date_time, amount, status")
       .single();
 
     if (error) {
@@ -116,6 +146,7 @@ export class SupabaseLedgerProvider implements LedgerProvider {
       customerId: data.customer_id,
       date: String(data.date_time).slice(0, 10),
       amount: Number(data.amount),
+      status: (data.status ?? "unpaid") as EntryStatus,
     };
   }
 
@@ -129,5 +160,45 @@ export class SupabaseLedgerProvider implements LedgerProvider {
       throw new Error(error.message || "Failed to delete entry from database");
     }
   }
-}
 
+  async markPaid(
+    entryId: string,
+    customerId: string,
+    status: "paid" | "partial",
+    amountPaid: number,
+  ): Promise<Entry> {
+    if (!amountPaid || amountPaid <= 0) {
+      throw new Error("Enter a valid amount");
+    }
+
+    // Record the payment so the balance trigger reduces this customer's balance.
+    const { error: payErr } = await this.supabaseClient.from("payments").insert({
+      customer_id: customerId,
+      date: new Date().toISOString().slice(0, 10),
+      amount_paid: amountPaid,
+    });
+    if (payErr) {
+      throw new Error(payErr.message || "Failed to record payment");
+    }
+
+    // Label this specific transaction with the chosen status.
+    const { data, error } = await this.supabaseClient
+      .from("transactions")
+      .update({ status })
+      .eq("id", entryId)
+      .select("id, customer_id, date_time, amount, status")
+      .single();
+
+    if (error) {
+      throw new Error(error.message || "Failed to update entry status");
+    }
+
+    return {
+      id: data.id,
+      customerId: data.customer_id,
+      date: String(data.date_time).slice(0, 10),
+      amount: Number(data.amount),
+      status: (data.status ?? "unpaid") as EntryStatus,
+    };
+  }
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, CheckCircle2, Circle, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +36,9 @@ export function CustomerLedgerModal({
     new Date().toISOString().split("T")[0]
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [partialAmount, setPartialAmount] = useState("");
+  const [statusBusy, setStatusBusy] = useState(false);
 
   // Load entries when modal opens
   useEffect(() => {
@@ -103,6 +106,30 @@ export function CustomerLedgerModal({
       const errorMessage = error?.message || error?.error_description || "Failed to delete entry";
       toast.error(errorMessage);
       console.error("Delete entry error:", error);
+    }
+  };
+
+  const handleMarkPaid = async (
+    entry: Entry,
+    status: "paid" | "partial",
+    amountPaid: number,
+  ) => {
+    setStatusBusy(true);
+    try {
+      const updated = await provider.markPaid(entry.id, customerId, status, amountPaid);
+      setEntries((prev) => prev.map((e) => (e.id === entry.id ? updated : e)));
+      toast.success(
+        status === "paid"
+          ? `Marked paid — ${formatCurrency(amountPaid)}`
+          : `Marked partial — ${formatCurrency(amountPaid)} recorded`,
+      );
+      setExpandedId(null);
+      setPartialAmount("");
+      onBalanceChange?.();
+    } catch (error: any) {
+      toast.error(error?.message || "Could not update status");
+    } finally {
+      setStatusBusy(false);
     }
   };
 
@@ -199,24 +226,114 @@ export function CustomerLedgerModal({
                         </p>
                       </div>
                       <div className="space-y-1">
-                        {dateEntries.map((entry) => (
-                          <div
-                            key={entry.id}
-                            className="flex items-center justify-between rounded bg-background px-2 py-1.5"
-                          >
-                            <span className="text-sm font-semibold text-foreground">
-                              ₹{Number(entry.amount).toFixed(2)}
-                            </span>
-                            <button
-                              onClick={() => handleDeleteEntry(entry.id)}
-                              disabled={isLoading}
-                              className="press rounded p-1 hover:bg-destructive/10"
-                              aria-label="Delete entry"
+                        {dateEntries.map((entry) => {
+                          const statusStyle =
+                            entry.status === "paid"
+                              ? "bg-[oklch(0.65_0.15_150/0.15)] text-[oklch(0.5_0.15_150)]"
+                              : entry.status === "partial"
+                              ? "bg-[oklch(0.75_0.15_75/0.2)] text-[oklch(0.5_0.15_75)]"
+                              : "bg-destructive/10 text-destructive";
+                          const statusLabel =
+                            entry.status === "paid"
+                              ? "Paid"
+                              : entry.status === "partial"
+                              ? "Partial"
+                              : "Unpaid";
+                          const isExpanded = expandedId === entry.id;
+
+                          return (
+                            <div
+                              key={entry.id}
+                              className="rounded bg-background px-2 py-1.5"
                             >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </button>
-                          </div>
-                        ))}
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-semibold text-foreground">
+                                  ₹{Number(entry.amount).toFixed(2)}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedId(isExpanded ? null : entry.id)
+                                    }
+                                    className={`pill press px-2.5 py-0.5 text-[11px] font-semibold ${statusStyle}`}
+                                  >
+                                    {statusLabel}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteEntry(entry.id)}
+                                    disabled={isLoading}
+                                    className="press rounded p-1 hover:bg-destructive/10"
+                                    aria-label="Delete entry"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {isExpanded && entry.status !== "paid" && (
+                                <div className="mt-2 space-y-2 border-t border-border/60 pt-2">
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={statusBusy}
+                                      onClick={() =>
+                                        handleMarkPaid(entry, "paid", Number(entry.amount))
+                                      }
+                                      className="press flex h-9 flex-1 items-center justify-center gap-1 rounded-lg gradient-warm text-xs font-semibold text-primary-foreground"
+                                    >
+                                      <CheckCircle2 className="h-3.5 w-3.5" /> Mark Paid
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={statusBusy}
+                                      onClick={() => {
+                                        setPartialAmount(String(entry.amount));
+                                        setExpandedId(`partial-${entry.id}`);
+                                      }}
+                                      className="press flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-secondary/15 text-xs font-semibold text-secondary"
+                                    >
+                                      <Circle className="h-3.5 w-3.5" /> Mark Partial
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {expandedId === `partial-${entry.id}` && (
+                                <div className="mt-2 flex items-center gap-2 border-t border-border/60 pt-2">
+                                  <Input
+                                    value={partialAmount}
+                                    onChange={(e) => setPartialAmount(e.target.value)}
+                                    inputMode="decimal"
+                                    placeholder="Amount paid"
+                                    className="h-9 flex-1"
+                                    autoFocus
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={statusBusy || !Number(partialAmount)}
+                                    onClick={() =>
+                                      handleMarkPaid(entry, "partial", Number(partialAmount))
+                                    }
+                                    className="press grid h-9 w-9 flex-none place-items-center rounded-lg gradient-warm text-primary-foreground"
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setExpandedId(null);
+                                      setPartialAmount("");
+                                    }}
+                                    className="press grid h-9 w-9 flex-none place-items-center rounded-lg bg-muted/70"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
