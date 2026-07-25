@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { Plus, ChevronRight, Phone, Trash2, Search, X } from "lucide-react";
+import { Plus, ChevronRight, Phone, Trash2, Search, X, CheckCircle2, Circle, Check } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,8 @@ function CustomersPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [search, setSearch] = useState("");
+  const [settleExpandedId, setSettleExpandedId] = useState<string | null>(null);
+  const [settlePartialAmount, setSettlePartialAmount] = useState("");
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<{
     id: string;
@@ -88,6 +90,26 @@ function CustomersPage() {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
     },
     onError: (e: Error) => toast.error(e.message || "Could not remove customer"),
+  });
+
+  const settleBalance = useMutation({
+    mutationFn: async ({ customer, amount }: { customer: Customer; amount: number }) => {
+      if (!amount || amount <= 0) throw new Error("Enter a valid amount");
+      const { error } = await supabase.from("payments").insert({
+        customer_id: customer.id,
+        date: new Date().toISOString().slice(0, 10),
+        amount_paid: amount,
+      });
+      if (error) throw error;
+      return amount;
+    },
+    onSuccess: (amount, { customer }) => {
+      toast.success(`${formatCurrency(amount)} recorded for ${customer.name}`);
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setSettleExpandedId(null);
+      setSettlePartialAmount("");
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not record payment"),
   });
 
   const totalOwed = customers.reduce((sum, c) => sum + Number(c.balance), 0);
@@ -170,60 +192,134 @@ function CustomersPage() {
 
       <div className="space-y-2">
         {filteredCustomers.map((c) => (
-          <div
-            key={c.id}
-            className="press solid-card flex items-center justify-between gap-3 p-4"
-          >
-            <button
-              onClick={() => {
-                setSelectedCustomer({ id: c.id, name: c.name });
-                setLedgerOpen(true);
-              }}
-              className="min-w-0 flex-1 text-left hover:opacity-80"
-            >
-              <p className="truncate text-base font-semibold text-foreground">{c.name}</p>
-              {c.phone && (
-                <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
-                  <Phone className="h-3 w-3" /> {c.phone}
-                </p>
-              )}
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="text-right">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Balance
-                </p>
-                <p
-                  className={[
-                    "mono-amount text-lg",
-                    Number(c.balance) > 0 ? "text-secondary" : "text-muted-foreground",
-                  ].join(" ")}
-                >
-                  {formatCurrency(Number(c.balance))}
-                </p>
-              </div>
+          <div key={c.id} className="solid-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={() => {
+                  setSelectedCustomer({ id: c.id, name: c.name });
+                  setLedgerOpen(true);
+                }}
+                className="press min-w-0 flex-1 text-left hover:opacity-80"
+              >
+                <p className="truncate text-base font-semibold text-foreground">{c.name}</p>
+                {c.phone && (
+                  <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+                    <Phone className="h-3 w-3" /> {c.phone}
+                  </p>
+                )}
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Balance
+                  </p>
+                  <p
+                    className={[
+                      "mono-amount text-lg",
+                      Number(c.balance) > 0 ? "text-secondary" : "text-muted-foreground",
+                    ].join(" ")}
+                  >
+                    {formatCurrency(Number(c.balance))}
+                  </p>
+                </div>
 
-              {isAdmin && (
+                {Number(c.balance) > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSettleExpandedId(settleExpandedId === c.id ? null : c.id)
+                    }
+                    className="pill press bg-destructive/10 px-2.5 py-1 text-[11px] font-semibold text-destructive"
+                  >
+                    Unpaid
+                  </button>
+                ) : (
+                  <span className="pill inline-flex items-center gap-1 bg-[oklch(0.65_0.15_150/0.15)] px-2.5 py-1 text-[11px] font-semibold text-[oklch(0.5_0.15_150)]">
+                    <CheckCircle2 className="h-3 w-3" /> Paid
+                  </span>
+                )}
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    aria-label={`Delete ${c.name}`}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Delete ${c.name}? This removes their record and all transaction/payment history. This can't be undone.`,
+                        )
+                      ) {
+                        deleteCustomer.mutate(c.id);
+                      }
+                    }}
+                    className="press grid h-8 w-8 flex-none place-items-center rounded-full bg-destructive/10"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </button>
+                )}
+
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </div>
+
+            {settleExpandedId === c.id && (
+              <div className="mt-3 flex gap-2 border-t border-border/60 pt-3">
                 <button
                   type="button"
-                  aria-label={`Delete ${c.name}`}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Delete ${c.name}? This removes their record and all transaction/payment history. This can't be undone.`,
-                      )
-                    ) {
-                      deleteCustomer.mutate(c.id);
-                    }
-                  }}
-                  className="press grid h-8 w-8 flex-none place-items-center rounded-full bg-destructive/10"
+                  disabled={settleBalance.isPending}
+                  onClick={() =>
+                    settleBalance.mutate({ customer: c, amount: Number(c.balance) })
+                  }
+                  className="press flex h-10 flex-1 items-center justify-center gap-1 rounded-xl gradient-warm text-xs font-semibold text-primary-foreground"
                 >
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  <CheckCircle2 className="h-4 w-4" /> Mark Paid ({formatCurrency(Number(c.balance))})
                 </button>
-              )}
+                <button
+                  type="button"
+                  disabled={settleBalance.isPending}
+                  onClick={() => {
+                    setSettlePartialAmount(String(c.balance));
+                    setSettleExpandedId(`partial-${c.id}`);
+                  }}
+                  className="press flex h-10 flex-1 items-center justify-center gap-1 rounded-xl bg-secondary/15 text-xs font-semibold text-secondary"
+                >
+                  <Circle className="h-4 w-4" /> Mark Partial
+                </button>
+              </div>
+            )}
 
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </div>
+            {settleExpandedId === `partial-${c.id}` && (
+              <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3">
+                <Input
+                  value={settlePartialAmount}
+                  onChange={(e) => setSettlePartialAmount(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="Amount paid"
+                  className="h-10 flex-1"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  disabled={settleBalance.isPending || !Number(settlePartialAmount)}
+                  onClick={() =>
+                    settleBalance.mutate({ customer: c, amount: Number(settlePartialAmount) })
+                  }
+                  className="press grid h-10 w-10 flex-none place-items-center rounded-xl gradient-warm text-primary-foreground"
+                >
+                  <Check className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettleExpandedId(null);
+                    setSettlePartialAmount("");
+                  }}
+                  className="press grid h-10 w-10 flex-none place-items-center rounded-xl bg-muted/70"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
