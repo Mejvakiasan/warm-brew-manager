@@ -18,8 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
-import { listUsersForAdmin, promoteUserToAdmin } from "@/lib/auth.functions";
-import { Moon, ShieldCheck, LogOut, Sun } from "lucide-react";
+import { listUsersForAdmin, promoteUserToAdmin, deactivateUser } from "@/lib/auth.functions";
+import { Moon, ShieldCheck, LogOut, Sun, UserX } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 const LANGUAGES = [
@@ -196,6 +196,7 @@ function ManageUsers() {
   const queryClient = useQueryClient();
   const listFn = useServerFn(listUsersForAdmin);
   const promoteFn = useServerFn(promoteUserToAdmin);
+  const deactivateFn = useServerFn(deactivateUser);
 
   const { data: users, isLoading, error } = useQuery({
     queryKey: ["admin-users"],
@@ -209,6 +210,15 @@ function ManageUsers() {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     },
     onError: (e: Error) => toast.error(e.message || "Could not promote user"),
+  });
+
+  const deactivate = useMutation({
+    mutationFn: (userId: string) => deactivateFn({ data: { userId } }),
+    onSuccess: () => {
+      toast.success("User removed");
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not remove user"),
   });
 
   return (
@@ -231,14 +241,33 @@ function ManageUsers() {
                 <ShieldCheck className="h-3.5 w-3.5" /> Admin
               </span>
             ) : (
-              <Button
-                size="sm"
-                onClick={() => promote.mutate(u.id)}
-                disabled={promote.isPending}
-                className="press rounded-full gradient-warm text-xs font-semibold"
-              >
-                Make admin
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => promote.mutate(u.id)}
+                  disabled={promote.isPending}
+                  className="press rounded-full gradient-warm text-xs font-semibold"
+                >
+                  Make admin
+                </Button>
+                <button
+                  type="button"
+                  aria-label={`Remove ${u.name || u.email}`}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Remove ${u.name || u.email}? They will no longer be able to sign in, but their past entries stay visible.`,
+                      )
+                    ) {
+                      deactivate.mutate(u.id);
+                    }
+                  }}
+                  disabled={deactivate.isPending}
+                  className="press grid h-8 w-8 flex-none place-items-center rounded-full bg-destructive/10"
+                >
+                  <UserX className="h-3.5 w-3.5 text-destructive" />
+                </button>
+              </div>
             )}
           </div>
         ))}

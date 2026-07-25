@@ -9,6 +9,50 @@ const bootstrapSchema = z.object({
   setupKey: z.string().min(1),
 });
 
+
+////
+
+const deactivateSchema = z.object({ userId: z.string().uuid() });
+
+export const deactivateUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => deactivateSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    // Verify caller is admin (RLS-scoped user client)
+    const { data: isAdmin, error: hrErr } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (hrErr) throw new Error(hrErr.message);
+    if (!isAdmin) throw new Error("Only admins can remove users.");
+    if (data.userId === context.userId) throw new Error("You can't remove your own account.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Don't allow removing the last remaining admin
+    const { data: targetIsAdmin } = await supabaseAdmin.rpc("has_role", {
+      _user_id: data.userId,
+      _role: "admin",
+    });
+    if (targetIsAdmin) {
+      const { count } = await supabaseAdmin
+        .from("user_roles")
+        .select("*", { count: "exact", head: true })
+        .eq("role", "admin");
+      if ((count ?? 0) <= 1) throw new Error("Can't remove the only remaining admin.");
+    }
+
+    // Ban the auth account so they can no longer sign in.
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
+      ban_duration: "876000h", // ~100 years, effectively permanent
+    });
+    if (error) throw new Error(error.message);
+
+    return { ok: true };
+  });
+
+////
+
 const promoteSchema = z.object({ userId: z.string().uuid() });
 
 export const getBootstrapStatus = createServerFn({ method: "GET" }).handler(async () => {
