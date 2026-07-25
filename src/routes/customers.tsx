@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { Plus, ChevronRight, Phone, Trash2 } from "lucide-react";
+import { Plus, ChevronRight, Phone, Trash2, Search, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ function CustomersPage() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [search, setSearch] = useState("");
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<{
     id: string;
@@ -91,6 +92,16 @@ function CustomersPage() {
 
   const totalOwed = customers.reduce((sum, c) => sum + Number(c.balance), 0);
 
+  const filteredCustomers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.phone ?? "").toLowerCase().includes(q),
+    );
+  }, [customers, search]);
+
   return (
     <AppShell title="Customers" subtitle="Accounts and balances" showFab={false}>
       <div className="solid-card mb-4 flex items-center justify-between p-4">
@@ -108,6 +119,27 @@ function CustomersPage() {
           </p>
           <p className="mono-amount mt-1 text-2xl text-secondary">{customers.length}</p>
         </div>
+      </div>
+
+      <div className="relative mb-4">
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name or phone…"
+          autoComplete="off"
+          className="h-12 w-full rounded-2xl border border-input bg-card pl-10 pr-10 text-sm outline-none focus:border-primary"
+        />
+        {search && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={() => setSearch("")}
+            className="press absolute right-3 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full bg-muted/70"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {isLoading && (
@@ -130,8 +162,14 @@ function CustomersPage() {
         </div>
       )}
 
+      {!isLoading && customers.length > 0 && filteredCustomers.length === 0 && (
+        <div className="solid-card p-8 text-center">
+          <p className="text-sm text-muted-foreground">No customers match "{search}".</p>
+        </div>
+      )}
+
       <div className="space-y-2">
-        {customers.map((c) => (
+        {filteredCustomers.map((c) => (
           <div
             key={c.id}
             className="press solid-card flex items-center justify-between gap-3 p-4"
