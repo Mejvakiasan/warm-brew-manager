@@ -18,8 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
-import { listUsersForAdmin, promoteUserToAdmin, deactivateUser, releaseUser } from "@/lib/auth.functions";
-import { Moon, ShieldCheck, LogOut, Sun, UserX, UserCheck } from "lucide-react";
+import { listUsersForAdmin, promoteUserToAdmin, deactivateUser, releaseUser, deleteUserPermanently } from "@/lib/auth.functions";
+import { Moon, ShieldCheck, LogOut, Sun, UserX, UserCheck, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 const LANGUAGES = [
@@ -198,6 +198,7 @@ function ManageUsers() {
   const promoteFn = useServerFn(promoteUserToAdmin);
   const deactivateFn = useServerFn(deactivateUser);
   const releaseFn = useServerFn(releaseUser);
+  const deleteFn = useServerFn(deleteUserPermanently);
 
   const { data: users, isLoading, error } = useQuery({
     queryKey: ["admin-users"],
@@ -229,6 +230,15 @@ function ManageUsers() {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     },
     onError: (e: Error) => toast.error(e.message || "Could not restore user"),
+  });
+
+  const permanentDelete = useMutation({
+    mutationFn: (userId: string) => deleteFn({ data: { userId } }),
+    onSuccess: () => {
+      toast.success("User permanently deleted");
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not delete user"),
   });
 
   return (
@@ -264,6 +274,23 @@ function ManageUsers() {
                 >
                   <UserCheck className="h-3.5 w-3.5 text-secondary" />
                 </button>
+                <button
+                  type="button"
+                  aria-label={`Delete ${u.name || u.email} permanently`}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Permanently delete ${u.name || u.email}? This cannot be undone.`,
+                      )
+                    ) {
+                      permanentDelete.mutate(u.id);
+                    }
+                  }}
+                  disabled={permanentDelete.isPending}
+                  className="press grid h-8 w-8 flex-none place-items-center rounded-full bg-destructive/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -291,6 +318,23 @@ function ManageUsers() {
                   className="press grid h-8 w-8 flex-none place-items-center rounded-full bg-destructive/10"
                 >
                   <UserX className="h-3.5 w-3.5 text-destructive" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Delete ${u.name || u.email} permanently`}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Permanently delete ${u.name || u.email}? This removes their account and profile entirely. This cannot be undone.`,
+                      )
+                    ) {
+                      permanentDelete.mutate(u.id);
+                    }
+                  }}
+                  disabled={permanentDelete.isPending}
+                  className="press grid h-8 w-8 flex-none place-items-center rounded-full bg-destructive/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </button>
               </div>
             )}

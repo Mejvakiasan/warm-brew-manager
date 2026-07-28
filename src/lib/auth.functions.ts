@@ -14,6 +14,42 @@ const bootstrapSchema = z.object({
 
 const deactivateSchema = z.object({ userId: z.string().uuid() });
 
+export const deleteUserPermanently = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => deactivateSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: isAdmin, error: hrErr } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (hrErr) throw new Error(hrErr.message);
+    if (!isAdmin) throw new Error("Only admins can delete users.");
+    if (data.userId === context.userId) throw new Error("You can't delete your own account.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: targetIsAdmin } = await supabaseAdmin.rpc("has_role", {
+      _user_id: data.userId,
+      _role: "admin",
+    });
+    if (targetIsAdmin) {
+      const { count } = await supabaseAdmin
+        .from("user_roles")
+        .select("*", { count: "exact", head: true })
+        .eq("role", "admin");
+      if ((count ?? 0) <= 1) throw new Error("Can't delete the only remaining admin.");
+    }
+
+    // Remove role + profile rows first, then the auth account itself.
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    await supabaseAdmin.from("users").delete().eq("id", data.userId);
+
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
+    if (error) throw new Error(error.message);
+
+    return { ok: true };
+  });
+
 export const deactivateUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => deactivateSchema.parse(d))
