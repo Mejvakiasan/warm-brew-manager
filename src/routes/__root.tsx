@@ -81,7 +81,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, interactive-widget=resizes-content" },
       { title: "Divakar Tea Shop — Shop Manager" },
       { name: "description", content: "Fast, mobile-first business manager for Divakar Tea Shop: sales, customer accounts, stock, and daily grocery." },
       { name: "theme-color", content: "#E8730A" },
