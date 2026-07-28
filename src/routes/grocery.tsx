@@ -111,9 +111,10 @@ function GroceryPage() {
       const seen = new Set<string>();
       const names: string[] = [];
       for (const row of data ?? []) {
-        if (!seen.has(row.name)) {
-          seen.add(row.name);
-          names.push(row.name);
+        const key = row.name.trim().toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          names.push(row.name.trim());
         }
       }
       return names.slice(0, 20);
