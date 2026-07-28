@@ -171,13 +171,14 @@ function GroceryPage() {
   type Suggestion = { name: string; source: "stock" | "history"; price?: number };
   const filteredSuggestions = useMemo<Suggestion[]>(() => {
     const q = itemName.trim().toLowerCase();
+    if (!q) return [];
     const stockNames = new Set(stockSuggestions.map((s) => s.name.toLowerCase()));
     const stockList: Suggestion[] = stockSuggestions
-      .filter((s) => !q || s.name.toLowerCase().includes(q))
+      .filter((s) => s.name.toLowerCase().includes(q))
       .map((s) => ({ name: s.name, source: "stock" as const, price: s.price }));
     const historyList: Suggestion[] = pastNames
       .filter((n) => !stockNames.has(n.toLowerCase()))
-      .filter((n) => !q || n.toLowerCase().includes(q))
+      .filter((n) => n.toLowerCase().includes(q))
       .map((n) => ({ name: n, source: "history" as const }));
     return [...stockList, ...historyList].slice(0, 8);
   }, [itemName, pastNames, stockSuggestions]);
