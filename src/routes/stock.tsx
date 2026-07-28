@@ -150,7 +150,7 @@ function StockPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         {products.map((p) => (
           <div key={p.id} className="glass press relative p-4">
             {isAdmin && (
@@ -255,7 +255,7 @@ function StockPage() {
             <Button
               onClick={() => saveProduct.mutate()}
               disabled={saveProduct.isPending || !productName.trim()}
-              className="press h-12 w-full rounded-2xl gradient-warm text-base font-semibold"
+              className="press h-8 w-8 rounded-2xl gradient-warm text-base font-semibold"
             >
               {saveProduct.isPending
                 ? "Saving…"
