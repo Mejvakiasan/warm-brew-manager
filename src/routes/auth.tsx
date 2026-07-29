@@ -17,6 +17,10 @@ export const Route = createFileRoute("/auth")({
 
 type Mode = "signin" | "signup" | "bootstrap";
 
+function isGmailAddress(value: string) {
+  return /^[^\s@]+@gmail\.com$/i.test(value.trim());
+}
+
 function AuthPage() {
   const navigate = useNavigate();
   const { session, loading } = useAuth();
@@ -49,6 +53,10 @@ function AuthPage() {
   }, [bootstrapStatus?.needsBootstrap]);
 
   const handleSignIn = async () => {
+    if (!isGmailAddress(email)) {
+      toast.error("Only Gmail (@gmail.com) accounts can sign in.");
+      return;
+    }
     setBusy(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -63,6 +71,10 @@ function AuthPage() {
   };
 
   const handleSignUp = async () => {
+    if (!isGmailAddress(email)) {
+      toast.error("Only Gmail (@gmail.com) addresses are allowed to sign up.");
+      return;
+    }
     setBusy(true);
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -137,6 +149,9 @@ function AuthPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="h-12"
             />
+            {mode !== "bootstrap" && (
+              <p className="text-[11px] text-muted-foreground">Only @gmail.com addresses allowed</p>
+            )}
           </Field>
           <Field label="Password">
             <Input
