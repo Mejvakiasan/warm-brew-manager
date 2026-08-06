@@ -36,7 +36,7 @@ type GroceryList = Tables<"grocery_lists">;
 type GroceryItem = Tables<"grocery_items">;
 type Tab = "todo" | "skipped" | "history";
 
-const UNITS = [" ","kg", "g", "litre", "ml", "piece", "packet", "box", "dozen"];
+const UNITS = ["kg", "g", "litre", "ml", "piece", "packet", "box", "dozen"];
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const tomorrowISO = () => {
   const d = new Date();
@@ -44,6 +44,14 @@ const tomorrowISO = () => {
   return d.toISOString().slice(0, 10);
 };
 const step = (unit: string) => (unit === "kg" || unit === "litre" ? 1 : 1);
+
+function formatDMY(dateStr: string) {
+  const d = new Date(dateStr);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
 
 function GroceryPage() {
   const { isAdmin } = useAuth();
@@ -437,19 +445,15 @@ function GroceryPage() {
     setEditingId(item.id);
     setEditName(item.name);
     setEditQty(String(item.quantity));
-    setEditUnit(item.unit || " ");
+    setEditUnit(item.unit || "kg");
     const q = Number(item.quantity) || 0;
     const unitPrice = q > 0 ? Number(item.price) / q : Number(item.price);
-    setEditPrice(unitPrice ? String(Number(unitPrice.toFixed(4))) : " ");
+    setEditPrice(unitPrice ? String(Number(unitPrice.toFixed(4))) : "");
   };
 
   const shareToWhatsApp = () => {
     if (!todayList) return;
-    const dateLabel = new Date(todayList.date).toLocaleDateString(undefined, {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
+    const dateLabel = formatDMY(todayList.date);
     const lines = [
       `🛒 Grocery List — ${dateLabel}`,
       `Budget: ${formatCurrency(Number(todayList.budget))}`,
@@ -544,9 +548,8 @@ function GroceryPage() {
                 <p className="text-sm font-semibold text-foreground">
                   {new Date(todayList.date).toLocaleDateString(undefined, {
                     weekday: "short",
-                    day: "numeric",
-                    month: "short",
                   })}
+                  , {formatDMY(todayList.date)}
                 </p>
                 <div className="flex items-center gap-1.5">
                   <p
@@ -569,7 +572,7 @@ function GroceryPage() {
                     }}
                     className="press grid h-5 w-5 flex-none place-items-center rounded-full bg-muted/70"
                   >
-                    <Pencil className="h-3 w-3 text-muted-foreground" />
+                    <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                   </span>
                 </div>
               </div>
@@ -716,7 +719,7 @@ function GroceryPage() {
                           type="button"
                           aria-label="Decrease quantity"
                           onClick={() =>
-                            updateQuantity.mutate({ item, delta: -step(item.unit || " c") })
+                            updateQuantity.mutate({ item, delta: -step(item.unit || "kg") })
                           }
                           className="press grid h-7 w-7 place-items-center rounded-full bg-muted/70"
                         >
@@ -957,7 +960,7 @@ function GroceryPage() {
               >
                 <div className="text-left">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-foreground">{l.date}</p>
+                    <p className="text-sm font-semibold text-foreground">{formatDMY(l.date)}</p>
                     {l.completed && (
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                         Completed
