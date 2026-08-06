@@ -36,7 +36,7 @@ type GroceryList = Tables<"grocery_lists">;
 type GroceryItem = Tables<"grocery_items">;
 type Tab = "todo" | "skipped" | "history";
 
-const UNITS = ["kg", "g", "litre", "ml", "piece", "packet", "box", "dozen"];
+const UNITS = [" ","kg", "g", "litre", "ml", "piece", "packet", "box", "dozen"];
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const tomorrowISO = () => {
   const d = new Date();
