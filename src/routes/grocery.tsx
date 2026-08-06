@@ -52,6 +52,8 @@ function GroceryPage() {
 
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [budgetInput, setBudgetInput] = useState("");
+  const [editBudgetOpen, setEditBudgetOpen] = useState(false);
+  const [editBudgetValue, setEditBudgetValue] = useState("");
 
   const [itemOpen, setItemOpen] = useState(false);
   const [itemName, setItemName] = useState("");
@@ -201,6 +203,25 @@ function GroceryPage() {
       setBudgetOpen(false);
     },
     onError: (e: Error) => toast.error(e.message || "Could not start list"),
+  });
+
+  const updateBudget = useMutation({
+    mutationFn: async () => {
+      if (!todayList?.id) throw new Error("No active list");
+      const budget = Number(editBudgetValue);
+      if (!budget || budget <= 0) throw new Error("Enter a valid budget");
+      const { error } = await supabase
+        .from("grocery_lists")
+        .update({ budget })
+        .eq("id", todayList.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Budget updated");
+      queryClient.invalidateQueries({ queryKey: ["grocery-list", todayISO()] });
+      setEditBudgetOpen(false);
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not update budget"),
   });
 
   const addItem = useMutation({
@@ -527,15 +548,30 @@ function GroceryPage() {
                     month: "short",
                   })}
                 </p>
-                <p
-                  className={[
-                    "text-xs",
-                    remaining < 0 ? "text-destructive" : "text-muted-foreground",
-                  ].join(" ")}
-                >
-                  Budget {formatCurrency(remaining)} · Spent{" "}
-                  {formatCurrency(spent)}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p
+                    className={[
+                      "text-xs",
+                      remaining < 0 ? "text-destructive" : "text-muted-foreground",
+                    ].join(" ")}
+                  >
+                    Budget {formatCurrency(remaining)} · Spent{" "}
+                    {formatCurrency(spent)}
+                  </p>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Edit budget"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditBudgetValue(String(todayList.budget));
+                      setEditBudgetOpen(true);
+                    }}
+                    className="press grid h-5 w-5 flex-none place-items-center rounded-full bg-muted/70"
+                  >
+                    <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-[11px] font-semibold text-muted-foreground">
@@ -564,6 +600,93 @@ function GroceryPage() {
                   const tint = item.skipped
                     ? "bg-red-50 border-red-200"
                     : "bg-card border-border";
+
+                  if (editingId === item.id) {
+                    return (
+                      <div key={item.id} className="rounded-2xl border border-border bg-card p-3">
+                        <div className="space-y-3">
+                          <Input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="h-10"
+                            placeholder="Item name"
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="flex items-center gap-1 rounded-xl border border-input px-1 py-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditQty((q) =>
+                                    String(Math.max(0, Number(q || 0) - step(editUnit))),
+                                  )
+                                }
+                                className="press grid h-8 w-8 flex-none place-items-center rounded-lg bg-muted/70"
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </button>
+                              <Input
+                                value={editQty}
+                                onChange={(e) => setEditQty(e.target.value)}
+                                inputMode="decimal"
+                                className="h-8 border-0 text-center shadow-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditQty((q) => String(Number(q || 0) + step(editUnit)))
+                                }
+                                className="press grid h-8 w-8 flex-none place-items-center rounded-lg gradient-warm text-primary-foreground"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <Select value={editUnit} onValueChange={setEditUnit}>
+                              <SelectTrigger className="h-10">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {UNITS.map((u) => (
+                                  <SelectItem key={u} value={u}>
+                                    {u}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Price per unit</Label>
+                            <Input
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              inputMode="decimal"
+                              className="h-10"
+                              placeholder="Price per unit"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Total: {formatCurrency((Number(editQty) || 0) * (Number(editPrice) || 0))}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => saveEdit.mutate(item)}
+                              className="press flex h-9 flex-1 items-center justify-center gap-1 rounded-xl gradient-warm text-sm font-semibold text-primary-foreground"
+                            >
+                              <Check className="h-4 w-4" /> Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingId(null)}
+                              className="press grid h-9 w-9 place-items-center rounded-xl bg-muted/70"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={item.id}
@@ -580,6 +703,14 @@ function GroceryPage() {
                           {formatCurrency(Number(item.price))}
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        aria-label="Edit item"
+                        onClick={() => startEdit(item)}
+                        className="press grid h-7 w-7 flex-none place-items-center rounded-full bg-muted/70"
+                      >
+                        <Pencil className="h-3.5 w-3.5 text-secondary" />
+                      </button>
                       <div className="flex items-center gap-1 rounded-full border border-border bg-card px-1 py-1">
                         <button
                           type="button"
@@ -977,6 +1108,35 @@ function GroceryPage() {
               className="press h-12 w-full rounded-2xl gradient-warm text-base font-semibold"
             >
               {createList.isPending ? "Starting…" : "Start list"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editBudgetOpen} onOpenChange={setEditBudgetOpen}>
+        <DialogContent className="bg-card">
+          <DialogHeader>
+            <DialogTitle className="font-display">Edit budget</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="g-edit-budget">Budget</Label>
+            <Input
+              id="g-edit-budget"
+              value={editBudgetValue}
+              onChange={(e) => setEditBudgetValue(e.target.value)}
+              inputMode="decimal"
+              placeholder="3000"
+              className="h-12"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => updateBudget.mutate()}
+              disabled={updateBudget.isPending}
+              className="press h-12 w-full rounded-2xl gradient-warm text-base font-semibold"
+            >
+              {updateBudget.isPending ? "Saving…" : "Save budget"}
             </Button>
           </DialogFooter>
         </DialogContent>
