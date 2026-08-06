@@ -437,10 +437,10 @@ function GroceryPage() {
     setEditingId(item.id);
     setEditName(item.name);
     setEditQty(String(item.quantity));
-    setEditUnit(item.unit || "kg");
+    setEditUnit(item.unit || " ");
     const q = Number(item.quantity) || 0;
     const unitPrice = q > 0 ? Number(item.price) / q : Number(item.price);
-    setEditPrice(unitPrice ? String(Number(unitPrice.toFixed(4))) : "");
+    setEditPrice(unitPrice ? String(Number(unitPrice.toFixed(4))) : " ");
   };
 
   const shareToWhatsApp = () => {
@@ -569,7 +569,7 @@ function GroceryPage() {
                     }}
                     className="press grid h-5 w-5 flex-none place-items-center rounded-full bg-muted/70"
                   >
-                    <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                    <Pencil className="h-3 w-3 text-muted-foreground" />
                   </span>
                 </div>
               </div>
@@ -716,7 +716,7 @@ function GroceryPage() {
                           type="button"
                           aria-label="Decrease quantity"
                           onClick={() =>
-                            updateQuantity.mutate({ item, delta: -step(item.unit || "kg") })
+                            updateQuantity.mutate({ item, delta: -step(item.unit || " c") })
                           }
                           className="press grid h-7 w-7 place-items-center rounded-full bg-muted/70"
                         >
